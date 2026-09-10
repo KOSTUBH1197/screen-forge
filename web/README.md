@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ScreenForge /web — renderer
 
-## Getting Started
+Owned by Person A (Kostubh). Renders a screen spec that conforms to
+`contracts/screen-spec.schema.json` (git tag `contracts-frozen`) at three panel
+classes. Layout comes only from `priority`, `size_hint` and `min_panel`.
 
-First, run the development server:
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The API base URL defaults to `http://localhost:8000`. Override it with
+`NEXT_PUBLIC_API_BASE`. With no API running, /web still works: tag values come
+from a local mock simulator and golden screens load from `contracts/fixtures`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open a golden screen directly by URL:
+`/?golden=status-alarms|trend|comms&panel=small|medium|large&view=single|side-by-side`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## What /web expects from /api
 
-## Learn More
+The contract in `CLAUDE.md` only names the endpoints. These are the shapes /web
+reads; anything else is reported on screen, never silently patched.
 
-To learn more about Next.js, take a look at the following resources:
+**CORS:** allow origin `http://localhost:3000`, methods `GET, POST`, header `Content-Type`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**`GET /tags/{asset_id}`**, polled once a second:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```json
+{
+  "asset_id": "line1.conveyorA",
+  "context_version": "conveyorA@v3",
+  "timestamp": "2026-09-11T10:15:00Z",
+  "tags":   { "Motor_1_RunStatus": true, "Temperature_PV": 61.4 },
+  "alarms": { "ALM_HT01": false, "ALM_LP01": false, "ALM_MT01": true }
+}
+```
 
-## Deploy on Vercel
+`alarms` maps every alarm id in the context to whether it is active; the alarm
+banner and severity colours depend on it. Comms health tags are booleans.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**`POST /generate`** with `{ "prompt": string, "asset_id": string | null, "panel_class": "small" | "medium" | "large" }`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Success: `{ "spec": <screen spec> }`, optionally with `"meta": {}`.
+- Failure, any HTTP status: `{ "error": "message" }` or, better,
+  `{ "error": { "stage": "intent" | "context" | "generation" | "schema" | "whitelist" | "read_only", "message": "...", "field": "/components/2/bind_tag" } }`.
+  `stage` decides which progress step turns red and the headline shown.
+
+Machine contexts are read from `contracts/fixtures` because the contract has no
+context endpoint.
