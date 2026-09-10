@@ -20,6 +20,7 @@ from pydantic import BaseModel
 import context_store
 import tag_simulator
 import generator
+import intent
 
 app = FastAPI(title="ScreenForge API")
 
@@ -62,7 +63,12 @@ def health():
 
 class GenerateRequest(BaseModel):
     prompt: str
-    asset_id: str
+    # Optional: /web's "detect machine from request" option sends null, and
+    # we work the asset out from the prompt (see intent.resolve_asset_id).
+    # Without the default, FastAPI would reject that body with a 422 before
+    # any of our code runs, and the caller would see FastAPI's {"detail": ...}
+    # shape instead of the agreed {"error": {...}} one.
+    asset_id: str | None = None
     panel_class: str  # "small" | "medium" | "large"
 
 
@@ -74,12 +80,30 @@ def generate(req: GenerateRequest):
     -- this endpoint itself always returns HTTP 200; the caller checks
     which key is present, per the agreed API contract in CLAUDE.md.
     """
-    try:
-        context_store.get_context(req.asset_id)
-    except context_store.ContextNotFoundError as e:
-        return {"error": {"message": str(e), "stage": "other", "field": "asset_id"}}
+    asset_id = (req.asset_id or "").strip()
 
-    spec, error = generator.generate_and_validate(req.prompt, req.asset_id, req.panel_class)
+    if not asset_id:
+        resolved = intent.resolve_asset_id(req.prompt)
+        if resolved is None:
+            return {
+                "error": {
+                    "message": (
+                        "Could not tell which machine this request is about. "
+                        f"Name the asset in the request, or pass asset_id "
+                        f"(known asset_ids: {context_store.list_asset_ids()})."
+                    ),
+                    "stage": "intent",
+                    "field": "asset_id",
+                }
+            }
+        asset_id = resolved
+
+    try:
+        context_store.get_context(asset_id)
+    except context_store.ContextNotFoundError as e:
+        return {"error": {"message": str(e), "stage": "context", "field": "asset_id"}}
+
+    spec, error = generator.generate_and_validate(req.prompt, asset_id, req.panel_class)
     if error is not None:
         return {"error": error}
     return {"spec": spec}
