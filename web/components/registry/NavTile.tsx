@@ -1,4 +1,4 @@
-import { findTag, formatValue, tagTitle } from "@/lib/format";
+import { displayUnit, findTag, formatValue, tagTitle } from "@/lib/format";
 import { activeAlarmsOnTag, SEVERITY_COLOR, worstSeverity } from "@/lib/severity";
 import { CellFrame } from "./CellFrame";
 import type { RegistryProps } from "./types";
@@ -10,16 +10,16 @@ export function NavTile({ component, context, live, onNavigate }: RegistryProps)
   const severity = worstSeverity(activeAlarmsOnTag(context, live.snapshot, tagName));
 
   return (
-    <CellFrame title={tagTitle(tag)} binding={tagName} severity={severity}>
+    <CellFrame title={tagTitle(tagName)} binding={tagName} severity={severity}>
       <div className="flex flex-1 items-end justify-between gap-3">
         <div className="flex items-baseline gap-2">
           <span
             className="numeral text-3xl font-bold leading-none"
             style={{ color: severity ? SEVERITY_COLOR[severity] : "var(--text)" }}
           >
-            {formatValue(raw, tag)}
+            {formatValue(raw)}
           </span>
-          <span className="text-sm text-muted">{tag.unit}</span>
+          <span className="text-sm text-muted">{displayUnit(tag.unit)}</span>
         </div>
         <button
           type="button"

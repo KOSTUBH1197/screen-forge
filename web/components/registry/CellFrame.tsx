@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { SEVERITY_COLOR, SEVERITY_LABEL, type Severity } from "@/lib/severity";
+import { SEVERITY_COLOR, type Severity } from "@/lib/severity";
 
 interface CellFrameProps {
   title: string;
@@ -36,7 +36,7 @@ export function CellFrame({ title, binding, severity, badge, children }: CellFra
               className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-bezel"
               style={{ background: color }}
             >
-              {SEVERITY_LABEL[severity]}
+              {severity}
             </span>
           )}
         </div>

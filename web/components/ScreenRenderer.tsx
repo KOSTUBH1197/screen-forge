@@ -16,17 +16,39 @@ interface ScreenRendererProps {
 }
 
 function bindingLabel(component: SpecComponent): string {
-  return component.bind_alarms ? component.bind_alarms.join(", ") : (component.bind_tag ?? "");
+  return component.bind_alarms?.join(", ") ?? component.bind_device ?? component.bind_tag ?? "(unbound)";
 }
 
-/** Defence in depth only: /api's validator is what guarantees bindings. Nothing is repaired here. */
+/**
+ * Defence in depth only: the /api validator is what guarantees bindings.
+ * A component that fails here is not drawn, and nothing is repaired.
+ */
 function bindingProblem(component: SpecComponent, context: MachineContext): string | null {
-  if (component.bind_alarms) {
-    const missing = component.bind_alarms.filter((id) => !context.alarms.some((a) => a.id === id));
-    return missing.length > 0 ? `${missing.join(", ")} not found in ${context.context_version}` : null;
+  const version = context.context_version;
+  switch (component.type) {
+    case "alarm_banner": {
+      if (!component.bind_alarms) return "alarm_banner has no bind_alarms";
+      const missing = component.bind_alarms.filter((id) => !context.alarms.some((a) => a.id === id));
+      return missing.length > 0 ? `${missing.join(", ")} not found in ${version}` : null;
+    }
+    case "comms_health": {
+      if (component.bind_device !== undefined) {
+        return context.comms.some((c) => c.device === component.bind_device)
+          ? null
+          : `device ${component.bind_device} not found in ${version}`;
+      }
+      if (component.bind_tag !== undefined) {
+        return context.comms.some((c) => c.health_tag === component.bind_tag)
+          ? null
+          : `${component.bind_tag} is not a comms health tag in ${version}`;
+      }
+      return "comms_health has no bind_device";
+    }
+    default: {
+      if (component.bind_tag === undefined) return `${component.type} has no bind_tag`;
+      return context.tags.some((t) => t.name === component.bind_tag) ? null : `${component.bind_tag} not found in ${version}`;
+    }
   }
-  const tag = component.bind_tag ?? "";
-  return context.tags.some((t) => t.name === tag) ? null : `${tag} not found in ${context.context_version}`;
 }
 
 function RendererNotice({ title, detail }: { title: string; detail: string }) {
@@ -51,7 +73,7 @@ function Cell({ item, context, live, onNavigate }: { item: LayoutItem } & Omit<S
   }
   const problem = bindingProblem(component, context);
   if (problem) {
-    return <RendererNotice title={`${entry.label} binding not in machine context`} detail={`${component.id}: ${problem}`} />;
+    return <RendererNotice title={`${entry.label} binding not usable`} detail={`${component.id}: ${problem}`} />;
   }
   return <entry.Component component={component} context={context} live={live} height={item.height} onNavigate={onNavigate} />;
 }

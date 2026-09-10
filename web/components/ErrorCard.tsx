@@ -1,11 +1,12 @@
-import type { ErrorStage, GenerateError } from "@/lib/spec";
+import type { GenerateError } from "@/lib/spec";
 
 export type ConsoleError =
   | { kind: "api"; error: GenerateError }
   | { kind: "unreachable"; message: string }
   | { kind: "client"; message: string };
 
-const STAGE_TITLE: Record<ErrorStage, string> = {
+// Keyed by the stage names /web expects from /api. Unknown stages fall back to a generic title.
+const STAGE_TITLE: Record<string, string> = {
   intent: "Couldn't work out which machine or what to show",
   context: "Machine context unavailable",
   generation: "The model didn't produce a screen",
@@ -14,7 +15,7 @@ const STAGE_TITLE: Record<ErrorStage, string> = {
   read_only: "Blocked: screens are read-only",
 };
 
-const STAGE_HINT: Record<ErrorStage, string> = {
+const STAGE_HINT: Record<string, string> = {
   intent: "Name the machine (for example “the conveyor” or “the chiller”) or pick it from the machine list.",
   context: "The machine's context could not be loaded, so nothing could be generated for it.",
   generation: "The model call failed or timed out. Try again.",
@@ -27,14 +28,16 @@ export function ErrorCard({ error, apiBase, hasScreen }: { error: ConsoleError; 
   let title: string;
   let message: string;
   let hint: string | null = null;
+  let stage: string | undefined;
   let field: string | null = null;
   let details: unknown;
 
   if (error.kind === "api") {
-    title = STAGE_TITLE[error.error.stage] ?? "Generation failed";
+    stage = error.error.stage;
+    title = (stage && STAGE_TITLE[stage]) || "Screen generation failed";
     message = error.error.message;
-    hint = STAGE_HINT[error.error.stage] ?? null;
-    field = error.error.field;
+    hint = (stage && STAGE_HINT[stage]) || null;
+    field = error.error.field ?? null;
     details = error.error.details;
   } else if (error.kind === "unreachable") {
     title = "Can't reach the ScreenForge API";
@@ -49,9 +52,7 @@ export function ErrorCard({ error, apiBase, hasScreen }: { error: ConsoleError; 
     <section role="alert" className="rounded-xl border border-sev-1/70 bg-cell p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-bold text-text">{title}</h2>
-        {error.kind === "api" && (
-          <span className="numeral rounded border border-cell-border px-2 py-0.5 text-xs text-muted">stage: {error.error.stage}</span>
-        )}
+        {stage && <span className="numeral rounded border border-cell-border px-2 py-0.5 text-xs text-muted">stage: {stage}</span>}
       </div>
       <p className="mt-1 text-base text-text">{message}</p>
       {field && (

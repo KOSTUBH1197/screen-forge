@@ -17,10 +17,9 @@
 
   /* Colour on a rendered screen is reserved for alarm severity
      (machine context alarms[].priority). Nothing else gets a hue. */
-  --sev-1: #ff453a; /* critical */
-  --sev-2: #ff9f0a; /* high */
-  --sev-3: #ffd60a; /* medium */
-  --sev-4: #64d2ff; /* low */
+  --sev-1: #ff453a; /* Critical */
+  --sev-2: #ff9f0a; /* High */
+  --sev-3: #ffd60a; /* Warning */
 }
 
 @theme inline {

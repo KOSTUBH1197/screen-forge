@@ -1,9 +1,10 @@
-import type { ErrorStage } from "@/lib/spec";
-
 export const STAGES = ["Parsing intent", "Retrieving context", "Generating spec", "Validating"] as const;
 
-/** Which progress stage an /api error stage belongs to. */
-export const STAGE_OF_ERROR: Record<ErrorStage, number> = {
+/**
+ * Which progress stage an /api error stage belongs to. The contract doesn't fix
+ * stage names, so unknown or missing stages are shown as failing at validation.
+ */
+export const STAGE_OF_ERROR: Record<string, number> = {
   intent: 0,
   context: 1,
   generation: 2,

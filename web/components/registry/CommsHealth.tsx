@@ -1,52 +1,42 @@
-import { clamp, findTag, formatValue, rangeOf, tagTitle } from "@/lib/format";
 import { activeAlarmsOnTag, SEVERITY_COLOR, worstSeverity } from "@/lib/severity";
-import type { CommsDef } from "@/lib/spec";
 import { CellFrame } from "./CellFrame";
 import type { RegistryProps } from "./types";
 
-const PROTOCOL_LABEL: Record<CommsDef["protocol"], string> = {
-  modbus_tcp: "Modbus TCP",
-  opc_ua: "OPC UA",
-  profinet: "PROFINET",
-  ethernet_ip: "EtherNet/IP",
-  mqtt: "MQTT",
-};
-
-function qualityWord(percent: number): string {
-  if (percent >= 80) return "Good";
-  if (percent >= 50) return "Degraded";
-  return "Poor";
-}
-
 export function CommsHealth({ component, context, live }: RegistryProps) {
-  const tagName = component.bind_tag ?? "";
-  const tag = findTag(context, tagName);
-  const device = context.comms.find((c) => c.health_tag === tagName);
-  const raw = live.snapshot?.tags[tagName];
-  const severity = worstSeverity(activeAlarmsOnTag(context, live.snapshot, tagName));
-  const range = rangeOf(tag);
-  const percent = typeof raw === "number" ? clamp(((raw - range.min) / (range.max - range.min || 1)) * 100, 0, 100) : 0;
-  const color = severity ? SEVERITY_COLOR[severity] : "var(--neutral-fill)";
+  // The golden spec binds a comms device by name; a health tag binding is also understood.
+  const device =
+    component.bind_device !== undefined
+      ? context.comms.find((c) => c.device === component.bind_device)
+      : context.comms.find((c) => c.health_tag === component.bind_tag);
+  const healthTag = device?.health_tag ?? component.bind_tag ?? "";
+  const raw = live.snapshot?.tags[healthTag];
+  const online = typeof raw === "boolean" ? raw : typeof raw === "number" ? raw > 0 : null;
+  const severity = worstSeverity(activeAlarmsOnTag(context, live.snapshot, healthTag));
+  const mark = severity ? SEVERITY_COLOR[severity] : "var(--neutral-fill)";
+
+  let label = "--";
+  if (online !== null) label = online ? "Online" : "Offline";
 
   return (
     <CellFrame
-      title={device ? device.device.replaceAll("_", " ") : tagTitle(tag)}
-      binding={tagName}
+      title={(device?.device ?? healthTag).replaceAll("_", " ")}
+      binding={device ? `${device.device} · ${healthTag}` : healthTag}
       severity={severity}
-      badge={device ? PROTOCOL_LABEL[device.protocol] : undefined}
+      badge={device?.protocol}
     >
       <div className="flex flex-1 flex-col justify-center gap-3">
-        <div className="flex items-baseline gap-2">
-          <span className="numeral text-5xl font-bold leading-none" style={{ color: severity ? color : "var(--text)" }}>
-            {formatValue(raw, tag)}
+        <div className="flex items-center gap-4">
+          <span
+            aria-hidden
+            className="size-9 shrink-0 rounded-full border-4"
+            style={{ borderColor: mark, background: online ? mark : "transparent" }}
+          />
+          <span
+            className="numeral text-4xl font-bold uppercase leading-none tracking-tight"
+            style={{ color: severity ? mark : "var(--text)" }}
+          >
+            {label}
           </span>
-          <span className="text-lg text-muted">{tag.unit}</span>
-          <span className="ml-auto text-sm font-semibold uppercase tracking-wide text-muted">
-            {typeof raw === "number" ? `Link ${qualityWord(percent)}` : ""}
-          </span>
-        </div>
-        <div className="h-3 w-full overflow-hidden rounded-full bg-track" aria-hidden>
-          <div className="h-full rounded-full" style={{ width: `${percent}%`, background: color }} />
         </div>
         {device && <p className="numeral truncate text-xs text-faint">{device.endpoint}</p>}
       </div>

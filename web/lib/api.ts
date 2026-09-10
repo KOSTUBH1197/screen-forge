@@ -1,15 +1,8 @@
-// Client for the /api endpoints defined in the x-screenforge header of
-// contracts/screen-spec.schema.json.
+// Client for the /api endpoints in the frozen contract (CLAUDE.md):
+//   POST /generate { prompt, asset_id, panel_class } -> { spec } | { error }
+//   GET  /tags/{asset_id} -> live values
 
-import type {
-  AssetSummary,
-  GenerateError,
-  GenerateResponse,
-  MachineContext,
-  PanelClass,
-  ScreenSpec,
-  TagsSnapshot,
-} from "./spec";
+import type { GenerateResponse, PanelClass, ScreenSpec, TagsSnapshot } from "./spec";
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
 
@@ -32,22 +25,10 @@ async function request(path: string, init: RequestInit, timeoutMs: number): Prom
   }
 }
 
-async function getJson<T>(path: string, timeoutMs: number): Promise<T> {
-  const res = await request(path, { headers: { Accept: "application/json" } }, timeoutMs);
-  if (!res.ok) throw new Error(`GET ${path} returned HTTP ${res.status}.`);
-  return (await res.json()) as T;
-}
-
-export function fetchTags(assetId: string): Promise<TagsSnapshot> {
-  return getJson<TagsSnapshot>(`/tags/${encodeURIComponent(assetId)}`, 1500);
-}
-
-export function fetchContext(assetId: string): Promise<MachineContext> {
-  return getJson<MachineContext>(`/context/${encodeURIComponent(assetId)}`, 3000);
-}
-
-export function fetchAssets(): Promise<AssetSummary[]> {
-  return getJson<AssetSummary[]>("/assets", 3000);
+export async function fetchTags(assetId: string): Promise<TagsSnapshot> {
+  const res = await request(`/tags/${encodeURIComponent(assetId)}`, { headers: { Accept: "application/json" } }, 1500);
+  if (!res.ok) throw new Error(`GET /tags returned HTTP ${res.status}.`);
+  return (await res.json()) as TagsSnapshot;
 }
 
 export interface GenerateRequest {
@@ -77,12 +58,11 @@ export function looksLikeSpec(value: unknown): value is ScreenSpec {
       typeof c.id === "string" &&
       typeof c.type === "string" &&
       typeof c.priority === "number" &&
-      typeof c.size_hint === "string" &&
-      (typeof c.bind_tag === "string" || Array.isArray(c.bind_alarms)),
+      typeof c.size_hint === "string",
   );
 }
 
-/** POST /generate. Reads the body whatever the HTTP status, as the contract requires. */
+/** POST /generate. Reads the body whatever the HTTP status. */
 export async function generateScreen(body: GenerateRequest): Promise<GenerateResponse> {
   const res = await request(
     "/generate",
@@ -101,8 +81,20 @@ export async function generateScreen(body: GenerateRequest): Promise<GenerateRes
     throw new Error(`/generate returned HTTP ${res.status} with a body that is not JSON.`);
   }
 
-  if (isObject(payload) && isObject(payload.error) && typeof payload.error.message === "string") {
-    return { error: payload.error as unknown as GenerateError };
+  // The contract doesn't fix the error shape: accept a plain string or an object with a message.
+  if (isObject(payload) && "error" in payload) {
+    const error = payload.error;
+    if (typeof error === "string") return { error: { message: error } };
+    if (isObject(error) && typeof error.message === "string") {
+      return {
+        error: {
+          message: error.message,
+          stage: typeof error.stage === "string" ? error.stage : undefined,
+          field: typeof error.field === "string" ? error.field : null,
+          details: error.details,
+        },
+      };
+    }
   }
   if (isObject(payload) && looksLikeSpec(payload.spec)) {
     return { spec: payload.spec, meta: isObject(payload.meta) ? payload.meta : undefined };

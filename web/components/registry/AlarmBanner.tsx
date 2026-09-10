@@ -1,4 +1,4 @@
-import { SEVERITY_COLOR, SEVERITY_LABEL } from "@/lib/severity";
+import { compareSeverity, SEVERITY_COLOR } from "@/lib/severity";
 import type { RegistryProps } from "./types";
 
 export function AlarmBanner({ component, context, live }: RegistryProps) {
@@ -6,7 +6,7 @@ export function AlarmBanner({ component, context, live }: RegistryProps) {
     const def = context.alarms.find((a) => a.id === id);
     return def ? [{ def, active: live.snapshot?.alarms[id] === true }] : [];
   });
-  const active = rows.filter((r) => r.active).sort((a, b) => a.def.priority - b.def.priority);
+  const active = rows.filter((r) => r.active).sort((a, b) => compareSeverity(a.def, b.def));
   const ordered = [...active, ...rows.filter((r) => !r.active)];
   const worst = active[0]?.def.priority ?? null;
   const color = worst ? SEVERITY_COLOR[worst] : undefined;
@@ -33,21 +33,21 @@ export function AlarmBanner({ component, context, live }: RegistryProps) {
         />
         <span className="truncate text-lg font-bold uppercase tracking-wide">{headline}</span>
         <span className={`ml-auto shrink-0 text-xs font-semibold uppercase tracking-wider ${color ? "" : "text-faint"}`}>
-          {worst ? `Highest: ${SEVERITY_LABEL[worst]}` : `Monitoring ${rows.length}`}
+          {worst ? `Highest: ${worst}` : `Monitoring ${rows.length}`}
         </span>
       </div>
       <ul className="divide-y divide-cell-border">
         {ordered.map(({ def, active: isActive }) => (
           <li key={def.id} className="flex items-center gap-3 px-4 py-2">
             <span
-              className="w-24 shrink-0 rounded px-1.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider"
+              className="w-20 shrink-0 rounded px-1.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider"
               style={
                 isActive
                   ? { background: SEVERITY_COLOR[def.priority], color: "var(--bezel)" }
                   : { border: "1px solid var(--cell-border)", color: "var(--text-faint)" }
               }
             >
-              P{def.priority} {SEVERITY_LABEL[def.priority]}
+              {def.priority}
             </span>
             <span className={`min-w-0 flex-1 truncate ${isActive ? "font-semibold text-text" : "text-muted"}`}>
               {def.desc}

@@ -19,7 +19,7 @@ interface PanelFrameProps {
 
 export function PanelFrame({ panel, spec, context, snapshot, children }: PanelFrameProps) {
   const rule = PANEL_RULES[panel];
-  const breadcrumb = context.asset_hierarchy.map((node) => node.name).join(" › ");
+  const breadcrumb = context.asset_hierarchy.join(" › ");
   const time = snapshot ? new Date(snapshot.timestamp).toLocaleTimeString([], { hour12: false }) : "--:--:--";
 
   return (

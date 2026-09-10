@@ -1,4 +1,4 @@
-import { clamp, findTag, formatNumber, formatValue, rangeOf, tagTitle } from "@/lib/format";
+import { clamp, displayRange, displayUnit, findTag, formatNumber, formatValue, tagTitle } from "@/lib/format";
 import { activeAlarmsOnTag, SEVERITY_COLOR, worstSeverity } from "@/lib/severity";
 import { HISTORY_CAPACITY } from "@/lib/useLiveTags";
 import { CellFrame } from "./CellFrame";
@@ -12,7 +12,7 @@ export function Trend({ component, context, live }: RegistryProps) {
   const tag = findTag(context, tagName);
   const samples = live.history[tagName] ?? [];
   const severity = worstSeverity(activeAlarmsOnTag(context, live.snapshot, tagName));
-  const range = rangeOf(tag, samples);
+  const range = displayRange(tag, samples);
   const span = range.max - range.min || 1;
   const y = (v: number) => H - ((clamp(v, range.min, range.max) - range.min) / span) * H;
   // Newest sample on the right edge; the line grows in from the left.
@@ -22,25 +22,22 @@ export function Trend({ component, context, live }: RegistryProps) {
   const current = live.snapshot?.tags[tagName];
   const low = samples.length > 0 ? Math.min(...samples) : null;
   const high = samples.length > 0 ? Math.max(...samples) : null;
-  const limits = context.alarms.flatMap((a) =>
-    a.tag === tagName && a.trip && typeof a.trip.value === "number" ? [{ alarm: a, value: a.trip.value }] : [],
-  );
 
   return (
-    <CellFrame title={tagTitle(tag)} binding={tagName} severity={severity}>
+    <CellFrame title={tagTitle(tagName)} binding={tagName} severity={severity}>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <div className="flex items-baseline gap-2">
           <span
             className="numeral text-4xl font-bold leading-none"
             style={{ color: severity ? SEVERITY_COLOR[severity] : "var(--text)" }}
           >
-            {formatValue(current, tag)}
+            {formatValue(current)}
           </span>
-          <span className="text-sm text-muted">{tag.unit}</span>
+          <span className="text-sm text-muted">{displayUnit(tag.unit)}</span>
         </div>
         <span className="numeral text-xs text-faint">
           {low !== null && high !== null
-            ? `min ${formatNumber(low, tag)} · max ${formatNumber(high, tag)} · last ${HISTORY_CAPACITY} s`
+            ? `min ${formatNumber(low)} · max ${formatNumber(high)} · last ${HISTORY_CAPACITY} s`
             : `last ${HISTORY_CAPACITY} s`}
         </span>
       </div>
@@ -50,30 +47,17 @@ export function Trend({ component, context, live }: RegistryProps) {
           preserveAspectRatio="none"
           className="absolute inset-0 h-full w-full"
           role="img"
-          aria-label={`Trend of ${tagTitle(tag)} over the last ${HISTORY_CAPACITY} seconds`}
+          aria-label={`Trend of ${tagTitle(tagName)} over the last ${HISTORY_CAPACITY} seconds`}
         >
           <rect x={0} y={0} width={W} height={H} fill="none" stroke="var(--track)" vectorEffect="non-scaling-stroke" />
           {[0.25, 0.5, 0.75].map((f) => (
             <line key={f} x1={0} x2={W} y1={H * f} y2={H * f} stroke="var(--track)" vectorEffect="non-scaling-stroke" />
           ))}
-          {limits.map(({ alarm, value }) => (
-            <line
-              key={alarm.id}
-              x1={0}
-              x2={W}
-              y1={y(value)}
-              y2={y(value)}
-              stroke={live.snapshot?.alarms[alarm.id] ? SEVERITY_COLOR[alarm.priority] : "var(--text-faint)"}
-              strokeDasharray="6 5"
-              strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
           {samples.length > 1 && (
             <polyline
               points={points}
               fill="none"
-              stroke="var(--neutral-fill)"
+              stroke={severity ? SEVERITY_COLOR[severity] : "var(--neutral-fill)"}
               strokeWidth={2.5}
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"

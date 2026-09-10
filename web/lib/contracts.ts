@@ -1,5 +1,6 @@
-// Frozen fixtures from contracts/, imported read-only. Used for the golden
-// screens and as the standalone fallback when /api is not running.
+// Frozen fixtures from contracts/ (git tag contracts-frozen), imported read-only.
+// They are the machine contexts /web renders against, the golden screens, and
+// the standalone fallback when /api is not running.
 import chiller from "../../contracts/fixtures/context.chiller.json";
 import conveyorA from "../../contracts/fixtures/context.conveyorA.json";
 import comms from "../../contracts/fixtures/spec.golden.comms.json";
@@ -18,7 +19,7 @@ export const FIXTURE_CONTEXTS: Record<string, MachineContext> = Object.fromEntri
 
 export const FIXTURE_ASSETS: AssetSummary[] = Object.values(FIXTURE_CONTEXTS).map((context) => ({
   asset_id: context.asset_id,
-  name: context.name,
+  name: context.asset_hierarchy.at(-1) ?? context.asset_id,
   context_version: context.context_version,
 }));
 
@@ -39,13 +40,13 @@ export const GOLDEN_SPECS: GoldenSpec[] = [
   {
     key: "trend",
     file: "spec.golden.trend.json",
-    label: "Chiller 1 · supply temperature trend",
+    label: "Conveyor A · temperature trend",
     spec: asSpec(trend),
   },
   {
     key: "comms",
     file: "spec.golden.comms.json",
-    label: "Conveyor A · communications health",
+    label: "Chiller 1 · connectivity health",
     spec: asSpec(comms),
   },
 ];

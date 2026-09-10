@@ -2,11 +2,10 @@
 
 import { useCallback, useRef, useState } from "react";
 import { API_BASE, ApiUnreachableError, generateScreen } from "@/lib/api";
-import { GOLDEN_SPECS } from "@/lib/contracts";
+import { FIXTURE_ASSETS, FIXTURE_CONTEXTS, GOLDEN_SPECS } from "@/lib/contracts";
 import { PANEL_CLASSES, PANEL_RULES } from "@/lib/layout";
 import type { PanelClass, ScreenSpec } from "@/lib/spec";
 import { useLiveTags, type TagSource } from "@/lib/useLiveTags";
-import { useAssets, useMachineContext, type ContextSource } from "@/lib/useMachineContext";
 import { ErrorCard, type ConsoleError } from "./ErrorCard";
 import { PANEL_NOMINAL_WIDTH, PanelFrame } from "./PanelFrame";
 import {
@@ -22,7 +21,7 @@ import { ScreenRenderer } from "./ScreenRenderer";
 const EXAMPLE_PROMPTS = [
   "Show conveyor A motor status and active alarms",
   "Trend the chiller supply water temperature",
-  "Communications health for the conveyor",
+  "Connectivity health for the chiller",
   "Let me start the conveyor motor",
 ];
 
@@ -69,14 +68,15 @@ function Segmented<T extends string>({
   );
 }
 
-function SourceBadge({ tags, context }: { tags: TagSource; context: ContextSource | null }) {
+function SourceBadge({ tags }: { tags: TagSource }) {
   const live = tags === "api";
-  const text = tags === "connecting" ? "Connecting…" : live ? "Live tags from API" : "Mock tags · API offline";
+  let text = "Mock tags · API offline";
+  if (tags === "connecting") text = "Connecting…";
+  else if (live) text = "Live tags from API";
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-cell-border px-3 py-1 text-xs font-semibold text-muted">
       <span className={`size-2 rounded-full ${live ? "bg-neutral-fill" : "border border-faint"}`} aria-hidden />
       {text}
-      {context === "fixture" && <span className="font-normal text-faint">· context from fixtures</span>}
     </span>
   );
 }
@@ -99,8 +99,8 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
   const [error, setError] = useState<ConsoleError | null>(null);
   const runId = useRef(0);
 
-  const assets = useAssets();
-  const { context, source: contextSource, error: contextError } = useMachineContext(spec.asset_id);
+  // Machine contexts come from the frozen fixtures; the contract has no context endpoint.
+  const context = FIXTURE_CONTEXTS[spec.asset_id] ?? null;
   const { live, source: tagSource } = useLiveTags(context);
   const running = progress.status === "running";
 
@@ -126,7 +126,8 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
       if (id !== runId.current) return;
 
       if ("error" in result) {
-        const failed = STAGE_OF_ERROR[result.error.stage] ?? STAGES.length - 1;
+        const stage = result.error.stage;
+        const failed = (stage !== undefined ? STAGE_OF_ERROR[stage] : undefined) ?? STAGES.length - 1;
         setProgress({ status: "failed", active: failed, failed, elapsedMs: performance.now() - started });
         setError({ kind: "api", error: result.error });
         return;
@@ -171,7 +172,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
           <h1 className="text-2xl font-black tracking-tight text-text">ScreenForge</h1>
           <p className="text-sm text-muted">Describe the screen you need. Get a validated, responsive HMI.</p>
         </div>
-        <SourceBadge tags={tagSource} context={contextSource} />
+        <SourceBadge tags={tagSource} />
       </header>
 
       <section className="rounded-xl border border-cell-border bg-surface p-4">
@@ -208,7 +209,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
                 className="flex-1 rounded-lg border border-cell-border bg-bg px-3 py-2.5 text-sm text-text lg:flex-none"
               >
                 <option value="auto">Machine: detect from request</option>
-                {assets.map((asset) => (
+                {FIXTURE_ASSETS.map((asset) => (
                   <option key={asset.asset_id} value={asset.asset_id}>
                     {asset.name} ({asset.asset_id})
                   </option>
@@ -303,8 +304,8 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
 
       {!context && (
         <p role="alert" className="rounded-lg border border-sev-1/70 bg-cell px-4 py-3 text-sm text-text">
-          No machine context for <span className="numeral">{spec.asset_id}</span>
-          {contextError ? `: ${contextError}` : "."} The screen can&apos;t be rendered without it.
+          No machine context for <span className="numeral">{spec.asset_id}</span> in contracts/fixtures. The screen
+          can&apos;t be rendered without it.
         </p>
       )}
 

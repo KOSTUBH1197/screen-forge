@@ -1,6 +1,6 @@
-// TypeScript mirror of contracts/screen-spec.schema.json and
-// contracts/machine-context.schema.json. The contracts are the source of truth;
-// if these types and the schemas disagree, the schemas win.
+// TypeScript mirror of the frozen contracts (git tag contracts-frozen):
+// contracts/screen-spec.schema.json and contracts/machine-context.schema.json.
+// If these types and the schemas disagree, the schemas win.
 
 export type PanelClass = "small" | "medium" | "large";
 export type SizeHint = "compact" | "medium" | "wide";
@@ -9,20 +9,24 @@ export type ComponentType =
   | "status_indicator"
   | "gauge"
   | "trend"
-  | "comms_health"
-  | "nav_tile";
+  | "nav_tile"
+  | "comms_health";
 
-interface ComponentBase {
+/**
+ * The schema lets any binding appear on any component. Which binding a type
+ * needs is enforced by the /api validator; the renderer only refuses to draw
+ * a component whose binding is missing.
+ */
+export interface SpecComponent {
   id: string;
   type: ComponentType;
+  bind_tag?: string;
+  bind_alarms?: string[];
+  bind_device?: string;
   priority: number;
   size_hint: SizeHint;
   min_panel?: PanelClass;
 }
-
-export type TagComponent = ComponentBase & { bind_tag: string; bind_alarms?: undefined };
-export type AlarmComponent = ComponentBase & { bind_alarms: string[]; bind_tag?: undefined };
-export type SpecComponent = TagComponent | AlarmComponent;
 
 export interface ScreenSpec {
   screen_id: string;
@@ -35,45 +39,43 @@ export interface ScreenSpec {
 
 export interface TagDef {
   name: string;
-  type: "bool" | "int" | "float";
-  unit: string;
-  access: "read" | "read_write";
-  description?: string;
-  range?: { min: number; max: number };
+  type: "bool" | "analog";
+  unit?: string;
+  access: "read" | "write";
 }
 
-export type TripOp = ">" | ">=" | "<" | "<=" | "==" | "!=";
+export type AlarmPriority = "Critical" | "High" | "Warning";
 
 export interface AlarmDef {
   id: string;
   desc: string;
-  priority: 1 | 2 | 3 | 4;
+  priority: AlarmPriority;
   tag: string;
-  trip?: { op: TripOp; value: number | boolean };
 }
 
 export interface CommsDef {
   device: string;
-  protocol: "modbus_tcp" | "opc_ua" | "profinet" | "ethernet_ip" | "mqtt";
+  protocol: string;
   endpoint: string;
   health_tag: string;
 }
 
 export interface MachineContext {
   asset_id: string;
-  name: string;
-  aliases?: string[];
   context_version: string;
-  asset_hierarchy: { level: string; id: string; name: string }[];
+  asset_hierarchy: string[];
   tags: TagDef[];
-  io: { digital_in: string[]; digital_out: string[]; analog_in: string[]; analog_out: string[] };
+  io: { digital_in?: string[]; digital_out?: string[]; analog_in?: string[]; analog_out?: string[] };
   alarms: AlarmDef[];
   comms: CommsDef[];
 }
 
 export type TagValue = boolean | number;
 
-/** Response body of GET /tags/{asset_id}. */
+/**
+ * Response body of GET /tags/{asset_id}. The contract only says "live values";
+ * this is the shape /web expects. Confirm it with /api before integration.
+ */
 export interface TagsSnapshot {
   asset_id: string;
   context_version: string;
@@ -82,16 +84,14 @@ export interface TagsSnapshot {
   alarms: Record<string, boolean>;
 }
 
-export type ErrorStage = "intent" | "context" | "generation" | "schema" | "whitelist" | "read_only";
-
+/** Error from POST /generate. The contract only says { error }, so stage and field are optional. */
 export interface GenerateError {
-  stage: ErrorStage;
   message: string;
-  field: string | null;
+  stage?: string;
+  field?: string | null;
   details?: unknown;
 }
 
-/** Response body of POST /generate. */
 export type GenerateResponse =
   | { spec: ScreenSpec; meta?: Record<string, unknown> }
   | { error: GenerateError };

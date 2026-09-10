@@ -7,31 +7,50 @@ export function clamp(value: number, min: number, max: number): number {
 export function findTag(context: MachineContext, name: string): TagDef {
   // The renderer checks bindings against the context before a component renders,
   // so the fallback only keeps the types honest.
-  return context.tags.find((t) => t.name === name) ?? { name, type: "float", unit: "", access: "read" };
+  return context.tags.find((t) => t.name === name) ?? { name, type: "analog", access: "read" };
 }
 
-export function tagTitle(tag: TagDef): string {
-  return tag.description ?? tag.name.replaceAll("_", " ");
+export function tagTitle(name: string): string {
+  return name.replaceAll("_", " ");
 }
 
-export function rangeOf(tag: TagDef, samples: number[] = []): { min: number; max: number } {
-  if (tag.range) return tag.range;
-  if (samples.length > 0) return { min: Math.min(...samples), max: Math.max(...samples) };
-  return { min: 0, max: 100 };
+export function displayUnit(unit: string | undefined): string {
+  if (unit === "degC") return "°C";
+  return unit ?? "";
 }
 
-function decimalsFor(tag: TagDef): number {
-  if (tag.type !== "float") return 0;
-  if (!tag.range) return 1;
-  return tag.range.max - tag.range.min <= 30 ? 1 : 0;
+// The contract carries no engineering ranges, so dial and trend scales are a
+// display choice: a default per unit, widened to include every value seen.
+const UNIT_RANGE: Record<string, { min: number; max: number }> = {
+  degC: { min: 0, max: 120 },
+  bar: { min: 0, max: 25 },
+  "m/s": { min: 0, max: 5 },
+  "%": { min: 0, max: 100 },
+};
+
+function niceCeil(value: number): number {
+  if (value <= 0) return 0;
+  const step = 10 ** Math.floor(Math.log10(value));
+  return Math.ceil(value / step) * step;
 }
 
-export function formatNumber(value: number, tag: TagDef): string {
-  return value.toFixed(decimalsFor(tag));
+export function displayRange(tag: TagDef, samples: number[] = []): { min: number; max: number } {
+  const base = UNIT_RANGE[tag.unit ?? ""] ?? { min: 0, max: 100 };
+  if (samples.length === 0) return base;
+  const low = Math.min(...samples);
+  const high = Math.max(...samples);
+  return {
+    min: low < base.min ? -niceCeil(-low) : base.min,
+    max: high > base.max ? niceCeil(high) : base.max,
+  };
 }
 
-export function formatValue(value: TagValue | undefined, tag: TagDef): string {
+export function formatNumber(value: number): string {
+  return Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(1);
+}
+
+export function formatValue(value: TagValue | undefined): string {
   if (value === undefined) return "--";
   if (typeof value === "boolean") return value ? "ON" : "OFF";
-  return formatNumber(value, tag);
+  return formatNumber(value);
 }

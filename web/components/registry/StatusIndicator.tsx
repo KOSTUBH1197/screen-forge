@@ -1,10 +1,11 @@
-import { findTag, formatValue, tagTitle } from "@/lib/format";
+import { formatValue, tagTitle } from "@/lib/format";
 import { activeAlarmsOnTag, SEVERITY_COLOR, worstSeverity } from "@/lib/severity";
 import { CellFrame } from "./CellFrame";
 import type { RegistryProps } from "./types";
 
 function stateLabels(tagName: string): [on: string, off: string] {
   if (/RunStatus|Running/i.test(tagName)) return ["Running", "Stopped"];
+  if (/Health/i.test(tagName)) return ["Online", "Offline"];
   if (/_OK$/i.test(tagName)) return ["OK", "Not OK"];
   if (/Active|Detected|Fault|Trip/i.test(tagName)) return ["Active", "Clear"];
   return ["On", "Off"];
@@ -12,15 +13,14 @@ function stateLabels(tagName: string): [on: string, off: string] {
 
 export function StatusIndicator({ component, context, live }: RegistryProps) {
   const tagName = component.bind_tag ?? "";
-  const tag = findTag(context, tagName);
   const value = live.snapshot?.tags[tagName];
   const severity = worstSeverity(activeAlarmsOnTag(context, live.snapshot, tagName));
   const mark = severity ? SEVERITY_COLOR[severity] : "var(--neutral-fill)";
   const [onLabel, offLabel] = stateLabels(tagName);
-  const label = typeof value === "boolean" ? (value ? onLabel : offLabel) : formatValue(value, tag);
+  const label = typeof value === "boolean" ? (value ? onLabel : offLabel) : formatValue(value);
 
   return (
-    <CellFrame title={tagTitle(tag)} binding={tagName} severity={severity}>
+    <CellFrame title={tagTitle(tagName)} binding={tagName} severity={severity}>
       <div className="flex flex-1 items-center gap-4">
         <span
           aria-hidden
