@@ -5,8 +5,10 @@ export const STAGES = ["Parsing intent", "Retrieving context", "Generating spec"
  * stage names, so unknown or missing stages are shown as failing at validation.
  */
 export const STAGE_OF_ERROR: Record<string, number> = {
+  request: 0,
   intent: 0,
   context: 1,
+  llm: 2,
   generation: 2,
   schema: 3,
   whitelist: 3,

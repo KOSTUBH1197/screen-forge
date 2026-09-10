@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { API_BASE, ApiUnreachableError, generateScreen } from "@/lib/api";
 import { FIXTURE_ASSETS, FIXTURE_CONTEXTS, GOLDEN_SPECS } from "@/lib/contracts";
 import { PANEL_CLASSES, PANEL_RULES } from "@/lib/layout";
-import type { PanelClass, ScreenSpec } from "@/lib/spec";
+import type { PanelClass, ScreenSpec, SpecComponent } from "@/lib/spec";
 import { useLiveTags, type TagSource } from "@/lib/useLiveTags";
 import { ErrorCard, type ConsoleError } from "./ErrorCard";
 import { PANEL_NOMINAL_WIDTH, PanelFrame } from "./PanelFrame";
@@ -164,6 +164,15 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
     setError(null);
   };
 
+  // Drill-down from a nav_tile: point the request at that asset; the operator decides what to ask.
+  const navigateTo = (component: SpecComponent) => {
+    const asset = FIXTURE_ASSETS.find((a) => a.asset_id === component.bind_asset);
+    if (!asset) return;
+    setTarget(asset.asset_id);
+    setPrompt(`Overview of ${asset.name}`);
+    document.getElementById("prompt")?.focus();
+  };
+
   const versionDrift = context !== null && context.context_version !== spec.context_version;
 
   return (
@@ -321,7 +330,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
         (view === "single" ? (
           <ScaleToFit width={PANEL_NOMINAL_WIDTH[panel]}>
             <PanelFrame panel={panel} spec={spec} context={context} snapshot={live.snapshot}>
-              <ScreenRenderer spec={spec} panel={panel} context={context} live={live} />
+              <ScreenRenderer spec={spec} panel={panel} context={context} live={live} onNavigate={navigateTo} />
             </PanelFrame>
           </ScaleToFit>
         ) : (
@@ -331,7 +340,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
               <div key={p} style={{ flex: `${PANEL_NOMINAL_WIDTH[p]} 1 0%`, minWidth: 0 }}>
                 <ScaleToFit width={PANEL_NOMINAL_WIDTH[p]}>
                   <PanelFrame panel={p} spec={spec} context={context} snapshot={live.snapshot}>
-                    <ScreenRenderer spec={spec} panel={p} context={context} live={live} />
+                    <ScreenRenderer spec={spec} panel={p} context={context} live={live} onNavigate={navigateTo} />
                   </PanelFrame>
                 </ScaleToFit>
               </div>

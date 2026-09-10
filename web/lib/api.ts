@@ -46,7 +46,7 @@ export function tagsSnapshotProblem(value: unknown, assetId: string): string | n
   if (!isObject(value.alarms)) return "it has no `alarms` object of alarm states";
   if (value.asset_id !== assetId) return `its asset_id is ${String(value.asset_id)}, expected ${assetId}`;
   if (typeof value.context_version !== "string") return "it has no context_version";
-  if (typeof value.timestamp !== "string") return "it has no timestamp";
+  if (typeof value.timestamp !== "string" && typeof value.timestamp !== "number") return "it has no timestamp";
   return null;
 }
 
@@ -94,6 +94,26 @@ export async function generateScreen(body: GenerateRequest): Promise<GenerateRes
     payload = await res.json();
   } catch {
     throw new Error(`/generate returned HTTP ${res.status} with a body that is not JSON.`);
+  }
+
+  // FastAPI rejects a request body that doesn't match its model with
+  // { detail: [{ loc: ["body", "asset_id"], msg }] } before /generate runs.
+  if (isObject(payload) && "detail" in payload && !("error" in payload)) {
+    const items = Array.isArray(payload.detail) ? payload.detail : [payload.detail];
+    const problems = items.map((item) => {
+      if (!isObject(item)) return String(item);
+      const loc = Array.isArray(item.loc) ? item.loc.filter((part) => part !== "body").join(".") : "";
+      return loc ? `${loc}: ${String(item.msg)}` : String(item.msg);
+    });
+    const first = items[0];
+    const field = isObject(first) && Array.isArray(first.loc) ? first.loc.filter((part) => part !== "body").join(".") : null;
+    return {
+      error: {
+        message: `The API rejected the request (HTTP ${res.status}): ${problems.join("; ")}`,
+        stage: "request",
+        field: field || null,
+      },
+    };
   }
 
   // The contract doesn't fix the error shape: accept a plain string or an object with a message.

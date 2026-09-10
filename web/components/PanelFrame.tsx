@@ -9,6 +9,12 @@ export const PANEL_NOMINAL_WIDTH: Record<PanelClass, number> = {
   large: 1180,
 };
 
+/** /tags timestamps arrive as ISO text or as Unix seconds (the /api simulator). */
+function clock(timestamp: string | number): string {
+  const date = typeof timestamp === "number" ? new Date(timestamp * 1000) : new Date(timestamp);
+  return date.toLocaleTimeString([], { hour12: false });
+}
+
 interface PanelFrameProps {
   panel: PanelClass;
   spec: ScreenSpec;
@@ -20,7 +26,7 @@ interface PanelFrameProps {
 export function PanelFrame({ panel, spec, context, snapshot, children }: PanelFrameProps) {
   const rule = PANEL_RULES[panel];
   const breadcrumb = context.asset_hierarchy.join(" › ");
-  const time = snapshot ? new Date(snapshot.timestamp).toLocaleTimeString([], { hour12: false }) : "--:--:--";
+  const time = snapshot ? clock(snapshot.timestamp) : "--:--:--";
 
   return (
     <div className="rounded-2xl bg-bezel p-3 ring-1 ring-cell-border" data-panel-frame={panel}>

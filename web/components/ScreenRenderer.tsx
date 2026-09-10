@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { FIXTURE_CONTEXTS } from "@/lib/contracts";
 import { computeLayout, type LayoutItem } from "@/lib/layout";
 import type { MachineContext, PanelClass, ScreenSpec, SpecComponent } from "@/lib/spec";
 import type { LiveValues } from "@/lib/useLiveTags";
@@ -16,7 +17,9 @@ interface ScreenRendererProps {
 }
 
 function bindingLabel(component: SpecComponent): string {
-  return component.bind_alarms?.join(", ") ?? component.bind_device ?? component.bind_tag ?? "(unbound)";
+  return (
+    component.bind_alarms?.join(", ") ?? component.bind_device ?? component.bind_asset ?? component.bind_tag ?? "(unbound)"
+  );
 }
 
 /**
@@ -43,6 +46,10 @@ function bindingProblem(component: SpecComponent, context: MachineContext): stri
           : `${component.bind_tag} is not a comms health tag in ${version}`;
       }
       return "comms_health has no bind_device";
+    }
+    case "nav_tile": {
+      if (component.bind_asset === undefined) return "nav_tile has no bind_asset";
+      return FIXTURE_CONTEXTS[component.bind_asset] ? null : `asset ${component.bind_asset} has no machine context`;
     }
     default: {
       if (component.bind_tag === undefined) return `${component.type} has no bind_tag`;

@@ -1,6 +1,7 @@
-// TypeScript mirror of the frozen contracts (git tag contracts-frozen):
-// contracts/screen-spec.schema.json and contracts/machine-context.schema.json.
-// If these types and the schemas disagree, the schemas win.
+// TypeScript mirror of the contracts: contracts/screen-spec.schema.json and
+// contracts/machine-context.schema.json (tag contracts-frozen, plus d4f634e on
+// main, which added bind_asset and per-type bindings). If these types and the
+// schemas disagree, the schemas win.
 
 export type PanelClass = "small" | "medium" | "large";
 export type SizeHint = "compact" | "medium" | "wide";
@@ -13,9 +14,10 @@ export type ComponentType =
   | "comms_health";
 
 /**
- * The schema lets any binding appear on any component. Which binding a type
- * needs is enforced by the /api validator; the renderer only refuses to draw
- * a component whose binding is missing.
+ * Bindings per type (schema, d4f634e): alarm_banner -> bind_alarms,
+ * comms_health -> bind_device, nav_tile -> bind_asset, status_indicator /
+ * gauge / trend -> bind_tag. The renderer refuses to draw a component whose
+ * binding is missing; it never guesses one.
  */
 export interface SpecComponent {
   id: string;
@@ -23,6 +25,7 @@ export interface SpecComponent {
   bind_tag?: string;
   bind_alarms?: string[];
   bind_device?: string;
+  bind_asset?: string;
   priority: number;
   size_hint: SizeHint;
   min_panel?: PanelClass;
@@ -74,12 +77,13 @@ export type TagValue = boolean | number;
 
 /**
  * Response body of GET /tags/{asset_id}. The contract only says "live values";
- * this is the shape /web expects. Confirm it with /api before integration.
+ * this is the shape /web reads (see web/README.md).
  */
 export interface TagsSnapshot {
   asset_id: string;
   context_version: string;
-  timestamp: string;
+  /** ISO-8601 text, or Unix time in seconds (what the /api simulator sends). */
+  timestamp: string | number;
   tags: Record<string, TagValue>;
   alarms: Record<string, boolean>;
 }

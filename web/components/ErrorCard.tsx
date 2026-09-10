@@ -7,8 +7,10 @@ export type ConsoleError =
 
 // Keyed by the stage names /web expects from /api. Unknown stages fall back to a generic title.
 const STAGE_TITLE: Record<string, string> = {
+  request: "The API rejected the request",
   intent: "Couldn't work out which machine or what to show",
   context: "Machine context unavailable",
+  llm: "The model didn't produce a screen",
   generation: "The model didn't produce a screen",
   schema: "Rejected: the spec broke the screen contract",
   whitelist: "Rejected: unknown tag or alarm for this machine",
@@ -16,8 +18,10 @@ const STAGE_TITLE: Record<string, string> = {
 };
 
 const STAGE_HINT: Record<string, string> = {
+  request: "/web and /api disagree on the request shape (see web/README.md). Picking a machine from the list may work around it.",
   intent: "Name the machine (for example “the conveyor” or “the chiller”) or pick it from the machine list.",
   context: "The machine's context could not be loaded, so nothing could be generated for it.",
+  llm: "The model call failed or timed out. Try again.",
   generation: "The model call failed or timed out. Try again.",
   schema: "The generated spec did not match contracts/screen-spec.schema.json, so it was not rendered. Specs are never auto-repaired.",
   whitelist: "The spec referenced something that does not exist on this machine. Every binding must come from its context.",
