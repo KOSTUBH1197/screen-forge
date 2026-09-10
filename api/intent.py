@@ -69,10 +69,14 @@ def resolve_asset_id(prompt: str) -> str | None:
 # --------------------------------------------------------------------------
 
 # Verbs that mean "change the machine", as opposed to "show me the machine".
+# Multi-word forms come first so the alternation prefers the longer match
+# ("emergency stop the conveyor" is an instruction, not a mention of a signal).
 _CONTROL_VERBS = (
-    r"(?:start|stop|restart|set|change|adjust|increase|decrease|raise|lower|"
+    r"(?:emergency stop|shut down|speed up|slow down|"
+    r"start|stop|restart|set|change|adjust|increase|decrease|raise|lower|"
     r"drop|bump|open|close|reset|enable|disable|turn|override|ramp|jog|"
-    r"speed up|slow down)"
+    r"switch|shut|kill|toggle|clear|acknowledge|ack|silence|put|"
+    r"hit|press|push|engage|activate)"
 )
 
 # Phrases where a control verb is a NOUN naming a signal, not an action being
@@ -84,7 +88,12 @@ _CONTROL_VERBS = (
 # also sits inside "let m|e stop| the belt" and "pleas|e stop| the motor",
 # and stripping it there deletes the verb and silently lets a real control
 # request through.
-_NOT_A_COMMAND = re.compile(r"\b(?:e[-\s]?stop|emergency\s+stop)\b", re.IGNORECASE)
+#
+# Only the NOUN forms are stripped. "emergency stop" is deliberately NOT here:
+# "emergency stop the conveyor" is an instruction, while "the e-stop" names a
+# signal. "close-up" gets the same treatment -- it's a noun ("close-up of the
+# refrigerant level"), not the verb "close".
+_NOT_A_COMMAND = re.compile(r"\b(?:e[-\s]?stop|close[-\s]?up)\b", re.IGNORECASE)
 
 # Every control verb above is also an ordinary verb for working a SCREEN:
 # you open an overview, close a banner, set a panel size, reset a view. What
@@ -111,6 +120,8 @@ _ALARM_OBJECTS = {"alarm", "alarms"}
 _STATE_CHANGING_VERBS = {
     "reset", "clear", "acknowledge", "ack", "silence", "start", "stop",
     "restart", "enable", "disable", "override", "jog", "ramp",
+    "switch", "shut", "kill", "toggle", "hit", "press", "push", "engage",
+    "activate",
 }
 
 # Words that turn "can you ... <verb>" into a question about the machine
@@ -144,6 +155,15 @@ _VERB_PATTERNS = [
     rf"allow me to|can i|could i|may i|how do i|how can i|can you|"
     rf"could you|can we|we need to|i should be able to)\b"
     rf"[^.?!]{{0,40}}?\b{_CONTROL_VERBS}\b",
+    # Split verb phrase: the verb and the direction sit either side of the
+    # thing being changed. "bring the belt speed down" is a command; "bring
+    # up the trend" is not, which is why the direction word matters.
+    r"\bbring\b[^.?!]{0,25}?\b(?:down|up to|back up|online|offline)\b",
+    # Wanting a machine STATE, with no control verb anywhere: "I need the
+    # conveyor running again". Distinct from "I need the motor status", which
+    # wants to look at it -- the state word is what separates them.
+    r"\b(?:i|we)\s+(?:need|want)\b[^.?!]{0,30}?"
+    r"\b(?:running|started|stopped|restarted|back on|switched on|turned on)\b",
 ]
 
 # Patterns that name a control AFFORDANCE outright: "give me a start button",

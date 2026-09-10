@@ -83,6 +83,22 @@ CONTROL = [
     "drop the compressor speed a bit",
     "stop the conveyor",
     "can you reset the high temperature alarm",
+    # Round three. Most were missing verbs, but three needed new rules:
+    # "bring ... down" splits the verb from its direction, "I need the
+    # conveyor running again" names a wanted STATE with no control verb at
+    # all, and "emergency stop the conveyor" is an instruction even though
+    # "the e-stop" is a signal name.
+    "please acknowledge the motor trip alarm",
+    "switch off the compressor",
+    "shut down the chiller",
+    "kill the conveyor motor",
+    "can you bring the belt speed down to 1 m/s",
+    "put the compressor in manual",
+    "I need the conveyor running again",
+    "clear the high temperature alarm",
+    "toggle the compressor",
+    "emergency stop the conveyor",
+    "hit the e-stop on the conveyor",
     "open the discharge valve",
     "close the bypass valve",
     "set the speed setpoint to 50",
@@ -135,6 +151,19 @@ NOT_CONTROL = [
     "drop the trend off this screen",
     "increase the size of the gauge",
     "show me alarms and open the trend",
+    # Round three: "close-up" is a noun, not the verb "close". The rest were
+    # already read correctly and are pinned so they stay that way -- note
+    # "is the e-stop active on line 1" and "how many times did motor 1 stop
+    # today" sit right next to control phrasings that MUST be refused.
+    "close-up of the refrigerant level",
+    "open alarms for the conveyor",
+    "when did the compressor last start?",
+    "how many times did motor 1 stop today",
+    "has anyone changed the setpoint recently",
+    "is the e-stop active on line 1",
+    "could you open the chiller alarms page",
+    "lower pressure alarms on the conveyor?",
+    "increase the size of the temperature gauge",
     "temperature has been creeping up all shift, show me how it is trended",
     "belt speed and pressure please, big numbers",
 ]
