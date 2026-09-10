@@ -99,6 +99,15 @@ CONTROL = [
     "toggle the compressor",
     "emergency stop the conveyor",
     "hit the e-stop on the conveyor",
+    # Round four. Four different causes, none of them a missing verb:
+    # "make/get X run" names a state with no control verb at all, "fire up"
+    # is a two-word verb, "we should ..." is a frame the list didn't have,
+    # and "I need X off" needed "off" as a state word.
+    "make the compressor run",
+    "get motor 1 going",
+    "we should shut the compressor off now",
+    "fire up the compressor",
+    "I need the compressor off",
     "open the discharge valve",
     "close the bypass valve",
     "set the speed setpoint to 50",
@@ -155,6 +164,21 @@ NOT_CONTROL = [
     # already read correctly and are pinned so they stay that way -- note
     # "is the e-stop active on line 1" and "how many times did motor 1 stop
     # today" sit right next to control phrasings that MUST be refused.
+    # Round four's viewing set. Several sit one word away from a control
+    # request -- "needs restarting", "keeps stopping", "need acknowledging" --
+    # and are only safe because the verb forms don't match.
+    "what's stopping the compressor from running?",
+    "show me which alarms need acknowledging",
+    "can I see the conveyor speed setpoint",
+    "check if the chiller needs restarting",
+    "I need to see why the compressor keeps stopping",
+    "let me see the belt speed",
+    "can you keep an eye on condenser pressure for me",
+    # "off" is a generic word, so these check that the object is still what
+    # decides once a pattern swallows its own object.
+    "I need the trend off this screen",
+    "get me the chiller overview",
+    "I need the alarms on this screen",
     "close-up of the refrigerant level",
     "open alarms for the conveyor",
     "when did the compressor last start?",

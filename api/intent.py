@@ -72,7 +72,7 @@ def resolve_asset_id(prompt: str) -> str | None:
 # Multi-word forms come first so the alternation prefers the longer match
 # ("emergency stop the conveyor" is an instruction, not a mention of a signal).
 _CONTROL_VERBS = (
-    r"(?:emergency stop|shut down|speed up|slow down|"
+    r"(?:emergency stop|shut down|speed up|slow down|fire up|power up|power down|"
     r"start|stop|restart|set|change|adjust|increase|decrease|raise|lower|"
     r"drop|bump|open|close|reset|enable|disable|turn|override|ramp|jog|"
     r"switch|shut|kill|toggle|clear|acknowledge|ack|silence|put|"
@@ -153,8 +153,14 @@ _VERB_PATTERNS = [
     #   "I want to start the motor from here", "can I reset that trip?"
     rf"\b(?:i want to|i need to|i'd like to|i would like to|let me|"
     rf"allow me to|can i|could i|may i|how do i|how can i|can you|"
-    rf"could you|can we|we need to|i should be able to)\b"
+    rf"could you|can we|we need to|i should be able to|"
+    rf"we should|i should|you should|someone should|we could|"
+    rf"we have to|i have to|we must|we ought to)\b"
     rf"[^.?!]{{0,40}}?\b{_CONTROL_VERBS}\b",
+    # Periphrastic causative: no control verb at all, just "cause this thing
+    # to be in that state". "make the compressor run", "get motor 1 going".
+    r"\b(?:make|get|have)\b[^.?!]{0,25}?"
+    r"\b(?:run|running|go|going|started|start up|moving|turning|spinning)\b",
     # Split verb phrase: the verb and the direction sit either side of the
     # thing being changed. "bring the belt speed down" is a command; "bring
     # up the trend" is not, which is why the direction word matters.
@@ -163,7 +169,8 @@ _VERB_PATTERNS = [
     # conveyor running again". Distinct from "I need the motor status", which
     # wants to look at it -- the state word is what separates them.
     r"\b(?:i|we)\s+(?:need|want)\b[^.?!]{0,30}?"
-    r"\b(?:running|started|stopped|restarted|back on|switched on|turned on)\b",
+    r"\b(?:running|started|stopped|restarted|back on|switched on|turned on|"
+    r"off|shut down|powered down)\b",
 ]
 
 # Patterns that name a control AFFORDANCE outright: "give me a start button",
@@ -187,19 +194,23 @@ def _trailing_verb(matched: str) -> str:
     return words[-1] if words else ""
 
 
-def _acts_on_the_interface(text: str, verb_end: int, verb: str) -> bool:
+def _acts_on_the_interface(text: str, match: re.Match, verb: str) -> bool:
     """
-    True when the object just after a control verb is part of the SCREEN
-    rather than part of the machine -- "open the chiller overview" as opposed
-    to "open the discharge valve".
+    True when the thing being acted on is part of the SCREEN rather than part
+    of the machine -- "open the chiller overview" as opposed to "open the
+    discharge valve".
+
+    Scans the matched span as well as what follows it, because some patterns
+    swallow their own object: "I need the trend off this screen" matches from
+    "i need" through "off", so the giveaway word sits inside the match.
     """
     objects = set(_VIEW_OBJECTS) | set(_VIEW_GERUNDS)
     if verb in _STATE_CHANGING_VERBS:
         # "open alarms" displays them; "reset the alarm" changes the machine.
         objects -= _ALARM_OBJECTS
 
-    tail = text[verb_end:verb_end + _OBJECT_WINDOW]
-    return any(word in objects for word in re.findall(r"[a-z]+", tail))
+    span = text[match.start():match.end() + _OBJECT_WINDOW]
+    return any(word in objects for word in re.findall(r"[a-z]+", span))
 
 
 def _is_really_a_question(matched: str) -> bool:
@@ -240,7 +251,7 @@ def control_request(prompt: str) -> str | None:
         for match in pattern.finditer(text):
             matched = match.group(0)
             verb = _trailing_verb(matched)
-            if _acts_on_the_interface(text, match.end(), verb):
+            if _acts_on_the_interface(text, match, verb):
                 continue  # this one is about the screen; keep looking
             if _is_really_a_question(matched):
                 continue  # asking what the machine does, not telling it to
