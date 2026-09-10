@@ -312,7 +312,64 @@ def read_only_error(asset_id: str | None, prompt: str) -> dict:
     }
 
 
-def _whats_new_note(asset_id: str, since_context_version: str | None) -> str:
+def _describe_binding(component: dict) -> str:
+    """'status_indicator(Compressor_RunStatus)' -- how a component reads in a prompt."""
+    binding = (
+        component.get("bind_tag")
+        or component.get("bind_device")
+        or component.get("bind_asset")
+        or ", ".join(component.get("bind_alarms") or [])
+    )
+    return f"{component.get('type')}({binding})"
+
+
+def _keep_what_is_onscreen_note(previous_spec: dict | None, current: dict) -> str:
+    """
+    A note listing what the operator is already looking at.
+
+    Regeneration is otherwise stateless: the model composes a fresh screen
+    from the prompt, so a screen regenerated after a sensor was added can
+    quietly come back with FEWER components than before. From the operator's
+    side that reads as losing data at the exact moment they were told the
+    machine gained some.
+    """
+    if not previous_spec:
+        return ""
+
+    known_tags = {t["name"] for t in current["tags"]}
+    known_alarms = {a["id"] for a in current["alarms"]}
+    known_devices = {c["device"] for c in current["comms"]}
+
+    still_there = []
+    for component in previous_spec.get("components", []):
+        binding = (
+            component.get("bind_tag")
+            or component.get("bind_device")
+            or component.get("bind_asset")
+            or ""
+        )
+        alarms = component.get("bind_alarms") or []
+        if (
+            binding in known_tags
+            or binding in known_devices
+            or binding in context_store.list_asset_ids()
+            or (alarms and all(a in known_alarms for a in alarms))
+        ):
+            still_there.append(_describe_binding(component))
+
+    if not still_there:
+        return ""
+
+    return (
+        f"\nThe operator is already looking at a screen showing: "
+        f"{'; '.join(still_there)}. Keep all of these, and add the new signal "
+        f"alongside them. The screen must not come back with fewer components "
+        f"than the operator can currently see."
+    )
+
+
+def _whats_new_note(asset_id: str, since_context_version: str | None,
+                    previous_spec: dict | None = None) -> str:
     """
     A note naming what appeared on this machine since the version the operator
     last saw, or "" when nothing did.
@@ -353,15 +410,23 @@ def _whats_new_note(asset_id: str, since_context_version: str | None) -> str:
         lines.append(
             f"Newly available: {described}. The operator is being shown this change, "
             f"so include the new signal(s) in the screen unless the request is "
-            f"explicitly about something else."
+            f"explicitly about something else. The operator is being told about "
+            f"this change right now, so the new signal must be visible even on "
+            f'the 7" panel, which shows only priority 1-3 and hides min_panel '
+            f'"medium": give each new signal min_panel "small" and a priority of '
+            f"2 or 3, renumbering the other components downward to make room. "
+            f"An alarm_banner always keeps priority 1."
         )
     if removed:
         lines.append(f"No longer available, never bind these: {', '.join(removed)}.")
-    return "\n".join(lines)
+
+    lines.append(_keep_what_is_onscreen_note(previous_spec, current))
+    return "\n".join(line for line in lines if line)
 
 
 def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_call_llm,
-                          since_context_version: str | None = None) -> tuple[dict | None, dict | None]:
+                          since_context_version: str | None = None,
+                          previous_spec: dict | None = None) -> tuple[dict | None, dict | None]:
     """
     Full pipeline: refuse control requests, then call the LLM, clean it,
     validate it, retry once on failure with the error appended, then give up.
@@ -387,7 +452,7 @@ def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_
         f"Operator request: \"{prompt}\"\n"
         f"Target panel class: {panel_class}\n"
         f"Machine context:\n{json.dumps(ctx, indent=2)}"
-        f"{_whats_new_note(asset_id, since_context_version)}"
+        f"{_whats_new_note(asset_id, since_context_version, previous_spec)}"
     )
 
     for attempt in range(2):  # first attempt + one retry
