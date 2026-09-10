@@ -76,6 +76,18 @@ CONTROL = [
     "give me a start button",
     "let me turn the compressor off",
     "add stop/start controls to this screen",
+    "open the discharge valve",
+    "close the bypass valve",
+    "set the speed setpoint to 50",
+    # The verb sits in a later clause, after a preamble.
+    "the motor is off, start it",
+    "someone hit the e-stop, now start the motor",
+    "check the temp and then stop the belt",
+    # Regression: "e stop" as a bare substring also sits inside "let m|e stop|"
+    # and "pleas|e stop|". Stripping it there used to delete the verb and let
+    # a real control request through.
+    "let me stop the belt",
+    "please stop the motor",
 ]
 
 # Must NOT be refused: these only look like commands. Every one of these
@@ -91,6 +103,24 @@ NOT_CONTROL = [
     "condenser pressure keeps spiking, give me what I need to keep an eye on it",
     "trend chilled water supply and return temps over the last hour",
     "was the compressor restarted overnight?",
+    # Every control verb is also an ordinary verb for working a SCREEN. These
+    # all used to be refused: the object, not the verb, is what decides.
+    "open the chiller overview",
+    "open the conveyor screen",
+    "open up the trend for temperature",
+    "open alarms for the conveyor",
+    "can I open the chiller overview?",
+    "set the panel to large",
+    "reset the view",
+    "close the alarm banner",
+    "turn to the chiller page",
+    "start monitoring the chiller",
+    "stop showing me the comms tiles",
+    "drop the trend off this screen",
+    "increase the size of the gauge",
+    "show me alarms and open the trend",
+    "temperature has been creeping up all shift, show me how it is trended",
+    "belt speed and pressure please, big numbers",
 ]
 
 

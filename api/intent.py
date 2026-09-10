@@ -79,32 +79,77 @@ _CONTROL_VERBS = (
 # requested. Removed from the text before matching, so "did someone hit the
 # e-stop or open the door?" doesn't read as a command -- while "hit the e-stop
 # then start the motor" still does.
-_NOT_A_COMMAND = ("e-stop", "e stop", "estop", "emergency stop")
+#
+# Anchored on word boundaries, NOT plain substrings: "e stop" as a substring
+# also sits inside "let m|e stop| the belt" and "pleas|e stop| the motor",
+# and stripping it there deletes the verb and silently lets a real control
+# request through.
+_NOT_A_COMMAND = re.compile(r"\b(?:e[-\s]?stop|emergency\s+stop)\b", re.IGNORECASE)
+
+# Every control verb above is also an ordinary verb for working a SCREEN:
+# you open an overview, close a banner, set a panel size, reset a view. What
+# separates the two is the object -- "open the valve" acts on the machine,
+# "open the chiller overview" just navigates. So when the thing being acted on
+# is part of the interface, it isn't a control request.
+_VIEW_OBJECTS = (
+    "screen", "view", "overview", "page", "dashboard", "display", "panel",
+    "layout", "trend", "chart", "graph", "banner", "tile", "gauge", "widget",
+    "summary", "zoom", "alarm", "alarms", "comms", "readout",
+)
+
+# "start monitoring the chiller", "stop showing me the comms tiles" -- a
+# control verb followed by a viewing verb is still just viewing.
+_VIEW_GERUNDS = (
+    "monitoring", "showing", "displaying", "watching", "tracking", "trending",
+    "viewing", "looking",
+)
+
+# How far past the verb to look for its object.
+_OBJECT_WINDOW = 40
 
 # A control verb alone is not enough: "why did the line stop earlier?" asks
 # about an event, it doesn't ask us to stop anything. What marks a real
 # control request is the FRAME around the verb -- an imperative opening, or
 # the operator saying they want to do it.
-_CONTROL_PATTERNS = [
-    # Imperative: the prompt opens with the command itself.
-    #   "drop the compressor speed a bit"
-    rf"^\s*(?:please\s+)?{_CONTROL_VERBS}\b",
+# Patterns built around a control VERB. These are the ambiguous ones, so a
+# match only counts once the object has been checked (see control_request).
+_VERB_PATTERNS = [
+    # Imperative: a clause begins with the command itself. Not just the start
+    # of the prompt -- "the motor is off, start it" and "..., now stop the
+    # belt" are the same request with a preamble.
+    rf"(?:^|[,;.]\s*|\b(?:now|then|and)\s+)(?:please\s+)?{_CONTROL_VERBS}\b",
     # Someone stating they want to act, or asking whether they may.
     #   "I want to start the motor from here", "can I reset that trip?"
     rf"\b(?:i want to|i need to|i'd like to|i would like to|let me|"
     rf"allow me to|can i|could i|may i|how do i|how can i|can you|"
     rf"could you|can we|we need to|i should be able to)\b"
     rf"[^.?!]{{0,40}}?\b{_CONTROL_VERBS}\b",
-    # Asking for the control affordance itself.
-    #   "give me a start button", "add stop/start controls"
+]
+
+# Patterns that name a control AFFORDANCE outright: "give me a start button",
+# "add stop/start controls to this screen". These aren't verb-ambiguous, so
+# they skip the object check -- a start button is a control even though it
+# lives on a screen, and object-checking them would read "...to this screen"
+# as evidence that it isn't one.
+_AFFORDANCE_PATTERNS = [
     rf"\b{_CONTROL_VERBS}\s+button\b",
     r"\bbutton to\s+\w+",
     r"\b(?:give me|add|put|include)\b[^.?!]{0,30}\bcontrols?\b",
 ]
 
-_COMPILED_CONTROL_PATTERNS = [
-    re.compile(pattern, re.IGNORECASE) for pattern in _CONTROL_PATTERNS
-]
+_COMPILED_VERB_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _VERB_PATTERNS]
+_COMPILED_AFFORDANCE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _AFFORDANCE_PATTERNS]
+
+
+def _acts_on_the_interface(text: str, verb_end: int) -> bool:
+    """
+    True when the object just after a control verb is part of the SCREEN
+    rather than part of the machine -- "open the chiller overview" as opposed
+    to "open the discharge valve".
+    """
+    tail = text[verb_end:verb_end + _OBJECT_WINDOW]
+    words = re.findall(r"[a-z]+", tail)
+    return any(word in _VIEW_OBJECTS or word in _VIEW_GERUNDS for word in words)
 
 
 def control_request(prompt: str) -> str | None:
@@ -114,13 +159,25 @@ def control_request(prompt: str) -> str | None:
 
     The returned phrase is quoted back to the operator so the refusal names
     what it's refusing, rather than being a generic "not allowed".
-    """
-    text = (prompt or "").lower()
-    for phrase in _NOT_A_COMMAND:
-        text = text.replace(phrase, " ")
 
-    for pattern in _COMPILED_CONTROL_PATTERNS:
+    When it's a close call this deliberately answers None. Refusing a genuine
+    viewing request is the worse error: it breaks normal use in front of a
+    judge, while a missed control request costs only the explanation -- the
+    read-only guarantee itself is structural (the spec vocabulary has no write
+    component, and validator.py rejects any binding to a write-access tag).
+    """
+    text = _NOT_A_COMMAND.sub(" ", (prompt or "").lower())
+
+    # Asking for a control affordance is unambiguous -- no object check.
+    for pattern in _COMPILED_AFFORDANCE_PATTERNS:
         match = pattern.search(text)
         if match:
+            return match.group(0).strip()
+
+    # A control verb only counts if it acts on the machine, not the screen.
+    for pattern in _COMPILED_VERB_PATTERNS:
+        for match in pattern.finditer(text):
+            if _acts_on_the_interface(text, match.end()):
+                continue  # this one is about the screen; keep looking
             return match.group(0).strip()
     return None
