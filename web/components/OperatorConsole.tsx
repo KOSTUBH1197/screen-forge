@@ -44,6 +44,17 @@ interface GenerateOptions {
   contextUpdate?: ReconcileReport | null;
 }
 
+// A regeneration that answers a context change says what the machine gained, so
+// the new screen can show it. Visible in the request text, never hidden.
+const ADDITIONS_NOTE = /\s*\(the machine now also has: [^)]*\)$/;
+
+function withContextAdditions(text: string, report: ReconcileReport | null): string {
+  const base = text.replace(ADDITIONS_NOTE, "");
+  const changes = report?.changes;
+  const added = changes ? [...changes.tags_added, ...changes.alarms_added, ...changes.comms_added] : [];
+  return added.length > 0 ? `${base} (the machine now also has: ${added.join(", ")})` : base;
+}
+
 function Segmented<T extends string>({
   label,
   value,
@@ -205,11 +216,15 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
     if (!staleKey || !reconcile || origin.kind !== "generated" || running) return;
     if (autoRegenerated.current === staleKey) return;
     autoRegenerated.current = staleKey;
-    void generate({ text: origin.prompt, assetId: spec.asset_id, contextUpdate: reconcile.report });
+    void generate({
+      text: withContextAdditions(origin.prompt, reconcile.report),
+      assetId: spec.asset_id,
+      contextUpdate: reconcile.report,
+    });
   }, [staleKey, reconcile, origin, running, generate, spec.asset_id]);
 
   const regenerateForContext = () => {
-    const text = origin.kind === "generated" ? origin.prompt : spec.title;
+    const text = withContextAdditions(origin.kind === "generated" ? origin.prompt : spec.title, reconcile?.report ?? null);
     setPrompt(text);
     void generate({ text, assetId: spec.asset_id, contextUpdate: reconcile?.report ?? null });
   };
