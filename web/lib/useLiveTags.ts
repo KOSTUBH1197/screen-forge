@@ -3,13 +3,13 @@
 // runs standalone. Keeps a ring buffer of the last 60 numeric samples per tag.
 
 import { useEffect, useState } from "react";
-import { fetchTags } from "./api";
+import { fetchTags, tagsSnapshotProblem } from "./api";
 import { MockTagSimulator } from "./mockTags";
 import type { MachineContext, TagsSnapshot } from "./spec";
 
 export const HISTORY_CAPACITY = 60;
 const POLL_MS = 1000;
-/** While the API is down, only retry it this often; mock values fill the gap. */
+/** While the API is down or answering in the wrong shape, only retry it this often. */
 const API_RETRY_MS = 5000;
 
 export type TagSource = "api" | "mock" | "connecting";
@@ -24,6 +24,8 @@ interface State {
   key: string | null;
   live: LiveValues;
   source: TagSource;
+  /** Set when /api answered GET /tags but the body could not be used. */
+  problem: string | null;
 }
 
 const NO_VALUES: LiveValues = { snapshot: null, history: {} };
@@ -32,8 +34,12 @@ function keyOf(context: MachineContext): string {
   return `${context.asset_id}|${context.context_version}`;
 }
 
-export function useLiveTags(context: MachineContext | null): { live: LiveValues; source: TagSource } {
-  const [state, setState] = useState<State>({ key: null, live: NO_VALUES, source: "connecting" });
+export function useLiveTags(context: MachineContext | null): {
+  live: LiveValues;
+  source: TagSource;
+  problem: string | null;
+} {
+  const [state, setState] = useState<State>({ key: null, live: NO_VALUES, source: "connecting", problem: null });
 
   useEffect(() => {
     if (!context) return;
@@ -42,6 +48,7 @@ export function useLiveTags(context: MachineContext | null): { live: LiveValues;
     let cancelled = false;
     let busy = false;
     let nextApiAttempt = 0;
+    let problem: string | null = null;
 
     const apply = (snapshot: TagsSnapshot, source: TagSource) => {
       setState((prev) => {
@@ -53,7 +60,7 @@ export function useLiveTags(context: MachineContext | null): { live: LiveValues;
           const kept = series.length >= HISTORY_CAPACITY ? series.slice(series.length - HISTORY_CAPACITY + 1) : series;
           history[name] = [...kept, value];
         }
-        return { key, live: { snapshot, history }, source };
+        return { key, live: { snapshot, history }, source, problem };
       });
     };
 
@@ -63,14 +70,15 @@ export function useLiveTags(context: MachineContext | null): { live: LiveValues;
       try {
         if (Date.now() >= nextApiAttempt) {
           try {
-            const snapshot = await fetchTags(context.asset_id);
+            const body = await fetchTags(context.asset_id);
             if (cancelled) return;
-            if (snapshot.asset_id === context.asset_id) {
-              apply(snapshot, "api");
+            problem = tagsSnapshotProblem(body, context.asset_id);
+            if (problem === null) {
+              apply(body as TagsSnapshot, "api");
               return;
             }
           } catch {
-            // Fall through to the mock simulator below.
+            problem = null; // unreachable, not malformed
           }
           if (cancelled) return;
           nextApiAttempt = Date.now() + API_RETRY_MS;
@@ -89,6 +97,6 @@ export function useLiveTags(context: MachineContext | null): { live: LiveValues;
     };
   }, [context]);
 
-  if (!context || state.key !== keyOf(context)) return { live: NO_VALUES, source: "connecting" };
-  return { live: state.live, source: state.source };
+  if (!context || state.key !== keyOf(context)) return { live: NO_VALUES, source: "connecting", problem: null };
+  return { live: state.live, source: state.source, problem: state.problem };
 }

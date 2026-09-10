@@ -2,7 +2,7 @@
 //   POST /generate { prompt, asset_id, panel_class } -> { spec } | { error }
 //   GET  /tags/{asset_id} -> live values
 
-import type { GenerateResponse, PanelClass, ScreenSpec, TagsSnapshot } from "./spec";
+import type { GenerateResponse, PanelClass, ScreenSpec } from "./spec";
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
 
@@ -25,20 +25,35 @@ async function request(path: string, init: RequestInit, timeoutMs: number): Prom
   }
 }
 
-export async function fetchTags(assetId: string): Promise<TagsSnapshot> {
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Raw GET /tags body. Check it with tagsSnapshotProblem before use. */
+export async function fetchTags(assetId: string): Promise<unknown> {
   const res = await request(`/tags/${encodeURIComponent(assetId)}`, { headers: { Accept: "application/json" } }, 1500);
   if (!res.ok) throw new Error(`GET /tags returned HTTP ${res.status}.`);
-  return (await res.json()) as TagsSnapshot;
+  return res.json();
+}
+
+/**
+ * Why a GET /tags body can't be used, or null when it has the shape /web expects:
+ * { asset_id, context_version, timestamp, tags: { name: value }, alarms: { id: active } }.
+ */
+export function tagsSnapshotProblem(value: unknown, assetId: string): string | null {
+  if (!isObject(value)) return "the body is not a JSON object";
+  if (!isObject(value.tags)) return "it has no `tags` object of tag values";
+  if (!isObject(value.alarms)) return "it has no `alarms` object of alarm states";
+  if (value.asset_id !== assetId) return `its asset_id is ${String(value.asset_id)}, expected ${assetId}`;
+  if (typeof value.context_version !== "string") return "it has no context_version";
+  if (typeof value.timestamp !== "string") return "it has no timestamp";
+  return null;
 }
 
 export interface GenerateRequest {
   prompt: string;
   asset_id: string | null;
   panel_class: PanelClass;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**

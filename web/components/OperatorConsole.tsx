@@ -68,11 +68,12 @@ function Segmented<T extends string>({
   );
 }
 
-function SourceBadge({ tags }: { tags: TagSource }) {
+function SourceBadge({ tags, mismatch }: { tags: TagSource; mismatch: boolean }) {
   const live = tags === "api";
   let text = "Mock tags · API offline";
   if (tags === "connecting") text = "Connecting…";
   else if (live) text = "Live tags from API";
+  else if (mismatch) text = "Mock tags · API /tags not understood";
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-cell-border px-3 py-1 text-xs font-semibold text-muted">
       <span className={`size-2 rounded-full ${live ? "bg-neutral-fill" : "border border-faint"}`} aria-hidden />
@@ -101,7 +102,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
 
   // Machine contexts come from the frozen fixtures; the contract has no context endpoint.
   const context = FIXTURE_CONTEXTS[spec.asset_id] ?? null;
-  const { live, source: tagSource } = useLiveTags(context);
+  const { live, source: tagSource, problem: tagsProblem } = useLiveTags(context);
   const running = progress.status === "running";
 
   const generate = useCallback(async () => {
@@ -172,8 +173,15 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
           <h1 className="text-2xl font-black tracking-tight text-text">ScreenForge</h1>
           <p className="text-sm text-muted">Describe the screen you need. Get a validated, responsive HMI.</p>
         </div>
-        <SourceBadge tags={tagSource} />
+        <SourceBadge tags={tagSource} mismatch={tagsProblem !== null} />
       </header>
+
+      {tagsProblem && (
+        <p role="status" className="rounded-lg border border-cell-border bg-surface px-4 py-2 text-sm text-text">
+          <span className="numeral">GET /tags/{spec.asset_id}</span> answered, but {tagsProblem}. Showing mock values until
+          the response has the expected shape.
+        </p>
+      )}
 
       <section className="rounded-xl border border-cell-border bg-surface p-4">
         <form
