@@ -81,13 +81,20 @@ function SourceBadge({ tags, context }: { tags: TagSource; context: ContextSourc
   );
 }
 
-export function OperatorConsole() {
+interface OperatorConsoleProps {
+  initialGolden?: string;
+  initialPanel?: string;
+  initialView?: string;
+}
+
+export function OperatorConsole({ initialGolden, initialPanel, initialView }: OperatorConsoleProps) {
+  const firstGolden = GOLDEN_SPECS.find((g) => g.key === initialGolden) ?? GOLDEN_SPECS[0];
   const [prompt, setPrompt] = useState("");
   const [target, setTarget] = useState("auto");
-  const [panel, setPanel] = useState<PanelClass>("medium");
-  const [view, setView] = useState<ViewMode>("single");
-  const [spec, setSpec] = useState<ScreenSpec>(GOLDEN_SPECS[0].spec);
-  const [origin, setOrigin] = useState<Origin>({ kind: "golden", key: GOLDEN_SPECS[0].key, file: GOLDEN_SPECS[0].file });
+  const [panel, setPanel] = useState<PanelClass>(PANEL_CLASSES.find((p) => p === initialPanel) ?? "medium");
+  const [view, setView] = useState<ViewMode>(initialView === "side-by-side" ? "side-by-side" : "single");
+  const [spec, setSpec] = useState<ScreenSpec>(firstGolden.spec);
+  const [origin, setOrigin] = useState<Origin>({ kind: "golden", key: firstGolden.key, file: firstGolden.file });
   const [progress, setProgress] = useState<GenerationProgress>(IDLE_PROGRESS);
   const [error, setError] = useState<ConsoleError | null>(null);
   const runId = useRef(0);
