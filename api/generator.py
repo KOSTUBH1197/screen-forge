@@ -6,8 +6,10 @@ Pipeline:
   1. Retrieve the machine context for the requested asset (dropping "io" --
      see note below).
   2. Build a system prompt containing the rules + 3 golden few-shot examples.
-  3. Call the LLM using OpenAI's Structured Outputs (strict JSON-schema mode)
-     so the SHAPE of the response is almost guaranteed correct.
+  3. Call the LLM using Structured Outputs (strict JSON-schema mode) so the
+     SHAPE of the response is almost guaranteed correct. OpenAI is used when
+     OPENAI_API_KEY is set; otherwise Groq's OpenAI-compatible API when
+     GROQ_API_KEY is set (see llm_provider()).
   4. Strip null binding fields (strict mode requires every field present,
      so the model emits bind_tag/bind_alarms/bind_device/bind_asset every
      time, three of them null).
@@ -36,6 +38,11 @@ import context_store
 import validator
 
 MODEL_NAME = "gpt-4o-mini"
+
+# Groq serves an OpenAI-compatible API, so the same client and the same strict
+# json_schema request work. gpt-oss-120b accepts GENERATION_SCHEMA in strict mode.
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_MODEL_NAME = "openai/gpt-oss-120b"
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "contracts" / "fixtures"
 SCREEN_SPEC_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "contracts" / "screen-spec.schema.json"
@@ -160,14 +167,30 @@ def _strip_nulls(spec: dict) -> dict:
     return cleaned
 
 
+def llm_provider() -> tuple[str, str]:
+    """
+    Which (provider, model) the next LLM call will use, read at call time:
+    OpenAI when OPENAI_API_KEY is set, otherwise Groq when GROQ_API_KEY is set.
+    """
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai", MODEL_NAME
+    if os.environ.get("GROQ_API_KEY"):
+        return "groq", GROQ_MODEL_NAME
+    raise RuntimeError("No LLM key set: put OPENAI_API_KEY or GROQ_API_KEY in api/.env")
+
+
 def _call_llm(system_prompt: str, user_prompt: str) -> dict:
     """
-    Real call to OpenAI using Structured Outputs. Requires OPENAI_API_KEY
-    to be set in the environment (see .env.example).
+    Real LLM call using Structured Outputs, against OpenAI or Groq depending
+    on which key is set (see llm_provider()).
     """
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    provider, model = llm_provider()
+    if provider == "openai":
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    else:
+        client = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url=GROQ_BASE_URL)
     response = client.chat.completions.create(
-        model=MODEL_NAME,
+        model=model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
