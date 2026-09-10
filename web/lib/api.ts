@@ -4,7 +4,10 @@
 
 import type { GenerateResponse, MachineContext, PanelClass, ReconcileReport, ScreenSpec } from "./spec";
 
-export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
+// 127.0.0.1 rather than "localhost": uvicorn listens on IPv4 only, and on Windows
+// "localhost" tries IPv6 (::1) first, which added ~2 s to requests. CORS is
+// unaffected -- /api checks the page's origin (http://localhost:3000), not this URL.
+export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 
 /** The API could not be reached at all (refused, DNS, timeout). */
 export class ApiUnreachableError extends Error {}
@@ -67,19 +70,30 @@ export async function fetchContext(assetId: string): Promise<MachineContext> {
   return body as unknown as MachineContext;
 }
 
-/** POST /reconcile: what changed since a screen was built, and which of its bindings no longer exist. */
-export async function reconcileScreen(spec: ScreenSpec): Promise<ReconcileReport> {
+/**
+ * POST /reconcile on any JSON value. /api's validator and reconciler judge it:
+ * what changed since it was built, which bindings no longer exist, and whether
+ * it is still valid. Nothing is repaired.
+ */
+export async function checkSpec(value: unknown): Promise<ReconcileReport> {
   const res = await request(
     "/reconcile",
-    { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ spec }) },
-    5000,
+    { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ spec: value }) },
+    // Generous: an operator pressed a button and can wait; a false "couldn't validate" in a demo is worse.
+    15000,
   );
   const body: unknown = await res.json().catch(() => null);
   if (isObject(body) && typeof body.stale === "boolean" && Array.isArray(body.broken_bindings)) {
     return body as unknown as ReconcileReport;
   }
-  const message = isObject(body) && isObject(body.error) && typeof body.error.message === "string" ? body.error.message : `HTTP ${res.status}`;
-  throw new Error(`/reconcile failed: ${message}`);
+  let message = `/reconcile returned HTTP ${res.status}`;
+  if (isObject(body) && isObject(body.error) && typeof body.error.message === "string") message = body.error.message;
+  else if (isObject(body) && "detail" in body) message = `The API rejected the request body (HTTP ${res.status}).`;
+  throw new Error(message);
+}
+
+export function reconcileScreen(spec: ScreenSpec): Promise<ReconcileReport> {
+  return checkSpec(spec);
 }
 
 export interface GenerateRequest {
