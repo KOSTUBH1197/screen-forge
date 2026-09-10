@@ -42,7 +42,8 @@ export function PanelFrame({ panel, spec, context, snapshot, children }: PanelFr
         <header className="mb-3 flex items-end justify-between gap-3 border-b border-cell-border pb-2">
           <div className="min-w-0">
             <p className="truncate text-[11px] uppercase tracking-wider text-faint">{breadcrumb}</p>
-            <h2 className="truncate text-xl font-bold text-text">{spec.title}</h2>
+            {/* Wraps to two lines rather than cutting the title off on a 7" panel. */}
+            <h2 className="line-clamp-2 break-words text-xl font-bold leading-tight text-text">{spec.title}</h2>
           </div>
           <div className="shrink-0 text-right">
             <p className="numeral text-lg font-semibold text-text">{time}</p>

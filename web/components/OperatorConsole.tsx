@@ -32,7 +32,7 @@ const EXAMPLE_PROMPTS = [
 type ViewMode = "single" | "side-by-side";
 
 type Origin =
-  | { kind: "golden"; key: string; file: string }
+  | { kind: "golden"; key: string; path: string; fallback: boolean }
   | { kind: "generated"; prompt: string; elapsedMs: number; contextUpdate: ReconcileReport | null };
 
 interface GenerateOptions {
@@ -119,7 +119,12 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
   const [panel, setPanel] = useState<PanelClass>(PANEL_CLASSES.find((p) => p === initialPanel) ?? "medium");
   const [view, setView] = useState<ViewMode>(initialView === "side-by-side" ? "side-by-side" : "single");
   const [spec, setSpec] = useState<ScreenSpec>(firstGolden.spec);
-  const [origin, setOrigin] = useState<Origin>({ kind: "golden", key: firstGolden.key, file: firstGolden.file });
+  const [origin, setOrigin] = useState<Origin>({
+    kind: "golden",
+    key: firstGolden.key,
+    path: firstGolden.path,
+    fallback: firstGolden.fallback,
+  });
   const [progress, setProgress] = useState<GenerationProgress>(IDLE_PROGRESS);
   const [error, setError] = useState<ConsoleError | null>(null);
   const runId = useRef(0);
@@ -240,7 +245,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
     if (!golden) return;
     runId.current += 1; // abandon any in-flight generation
     setSpec(golden.spec);
-    setOrigin({ kind: "golden", key: golden.key, file: golden.file });
+    setOrigin({ kind: "golden", key: golden.key, path: golden.path, fallback: golden.fallback });
     setProgress(IDLE_PROGRESS);
     setError(null);
   };
@@ -387,7 +392,8 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
       <p className="text-sm text-muted">
         {origin.kind === "golden" ? (
           <>
-            Golden fixture <code className="numeral text-text">contracts/fixtures/{origin.file}</code>
+            {origin.fallback ? "Pre-generated fallback screen" : "Golden fixture"}{" "}
+            <code className="numeral text-text">{origin.path}</code>
           </>
         ) : (
           <>

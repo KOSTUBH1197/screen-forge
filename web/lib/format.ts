@@ -20,13 +20,19 @@ export function displayUnit(unit: string | undefined): string {
 }
 
 // The contract carries no engineering ranges, so dial and trend scales are a
-// display choice: a default per unit, widened to include every value seen.
+// display choice. Before any samples arrive: a default per unit. After: the
+// smallest step on a coarse ladder with headroom above the recent values, so a
+// 7 °C chilled-water reading isn't lost on a 0-120 °C dial. The ladder is coarse
+// on purpose -- normal drift never moves the scale, only a real excursion does.
 const UNIT_RANGE: Record<string, { min: number; max: number }> = {
   degC: { min: 0, max: 120 },
   bar: { min: 0, max: 25 },
   "m/s": { min: 0, max: 5 },
   "%": { min: 0, max: 100 },
 };
+
+const SCALE_LADDER = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+const HEADROOM = 1.5;
 
 function niceCeil(value: number): number {
   if (value <= 0) return 0;
@@ -39,10 +45,11 @@ export function displayRange(tag: TagDef, samples: number[] = []): { min: number
   if (samples.length === 0) return base;
   const low = Math.min(...samples);
   const high = Math.max(...samples);
-  return {
-    min: low < base.min ? -niceCeil(-low) : base.min,
-    max: high > base.max ? niceCeil(high) : base.max,
-  };
+  const min = low < 0 ? -niceCeil(-low) : 0;
+  // Percentages keep their natural 0-100 scale.
+  if (tag.unit === "%") return { min, max: Math.max(100, niceCeil(high)) };
+  const wanted = high * HEADROOM;
+  return { min, max: SCALE_LADDER.find((step) => step >= wanted) ?? niceCeil(wanted) };
 }
 
 export function formatNumber(value: number): string {
