@@ -24,6 +24,10 @@ import context_store
 # Reasonable normal-operating baselines per tag name, used only by the
 # simulator (a real PLC wouldn't need this -- it would just report reality).
 # unit is informational only, taken from the tag's own definition.
+# excursion_swing is a magnitude with a direction: a POSITIVE value can jump
+# either way, a NEGATIVE one only ever falls. Refrigerant level is the reason
+# the distinction exists -- "low refrigerant" is the interesting story, and a
+# tank that spontaneously fills itself isn't one.
 _BASELINES = {
     "Conveyor_Speed_SP": {"baseline": 1.2, "normal_swing": 0.05, "excursion_chance": 0.03, "excursion_swing": 0.4},
     "Temperature_PV": {"baseline": 45.0, "normal_swing": 1.5, "excursion_chance": 0.05, "excursion_swing": 20.0},
@@ -32,13 +36,43 @@ _BASELINES = {
     "Chilled_Water_Return_Temp": {"baseline": 12.0, "normal_swing": 0.3, "excursion_chance": 0.03, "excursion_swing": 5.0},
     "Condenser_Pressure": {"baseline": 9.0, "normal_swing": 0.2, "excursion_chance": 0.05, "excursion_swing": 3.0},
     "Evaporator_Pressure": {"baseline": 4.0, "normal_swing": 0.15, "excursion_chance": 0.03, "excursion_swing": 1.5},
-    "Refrigerant_Level_PV": {"baseline": 85.0, "normal_swing": 2.0, "excursion_chance": 0.05, "excursion_swing": -40.0},
+    # Lower excursion_chance than the others on purpose: a fall of 40 takes
+    # roughly 8 steps to recover from, so at 0.05 the level would settle near
+    # 45 and ALM_LR01 would simply be on for good. At 0.015 it sits near
+    # baseline and dips below the alarm threshold now and then, which is the
+    # behaviour worth showing.
+    "Refrigerant_Level_PV": {"baseline": 85.0, "normal_swing": 2.0, "excursion_chance": 0.015, "excursion_swing": -40.0},
 }
 
 # Fallback for any analog tag we didn't hand-tune above (e.g. health tags
 # treated as analog by mistake, or a tag added later) -- keeps the demo from
 # crashing if someone adds a tag without updating this file.
 _DEFAULT_ANALOG = {"baseline": 50.0, "normal_swing": 2.0, "excursion_chance": 0.02, "excursion_swing": 10.0}
+
+# Physical limits, keyed by the tag's own unit rather than its name, so a tag
+# that appears at runtime (the Phase 4 context bump adds one) is bounded
+# without anyone editing this file. None means "no limit in that direction";
+# degC is deliberately absent because chilled water legitimately goes below
+# zero, while a percentage or a pressure below zero is a simulator bug.
+_UNIT_LIMITS: dict[str, tuple[float | None, float | None]] = {
+    "%": (0.0, 100.0),
+    "bar": (0.0, None),
+    "kpa": (0.0, None),
+    "psi": (0.0, None),
+    "m/s": (0.0, None),
+    "rpm": (0.0, None),
+    "hz": (0.0, None),
+}
+
+
+def _clamp_to_unit(value: float, unit: str | None) -> float:
+    """Hold a value inside what its unit can physically mean."""
+    low, high = _UNIT_LIMITS.get((unit or "").strip().lower(), (None, None))
+    if low is not None:
+        value = max(low, value)
+    if high is not None:
+        value = min(high, value)
+    return value
 
 # Bool tags representing "is this machine currently running normally" should
 # start True (running) so a demo doesn't open with a false trip alarm already
@@ -108,17 +142,22 @@ def _step_bool(current: bool, tag_name: str) -> bool:
     return current
 
 
-def _step_analog(current: float, tag_name: str) -> float:
+def _step_analog(current: float, tag_name: str, unit: str | None = None) -> float:
     profile = _BASELINES.get(tag_name, _DEFAULT_ANALOG)
+    swing = profile["excursion_swing"]
     if random.random() < profile["excursion_chance"]:
-        # A bigger jump -- this is what should trip an alarm.
-        current += random.choice([-1, 1]) * profile["excursion_swing"]
+        # A bigger jump -- this is what should trip an alarm. A negative
+        # excursion_swing falls only; a positive one can go either way.
+        if swing < 0:
+            current -= abs(swing)
+        else:
+            current += random.choice([-1, 1]) * swing
     else:
         # Normal small drift.
         current += random.uniform(-1, 1) * profile["normal_swing"]
     # Pull gently back toward baseline so it doesn't wander off forever.
     current += (profile["baseline"] - current) * 0.05
-    return round(current, 2)
+    return round(_clamp_to_unit(current, unit), 2)
 
 
 def get_live_values(asset_id: str) -> dict:
@@ -138,7 +177,7 @@ def get_live_values(asset_id: str) -> dict:
         if tag["type"] == "bool":
             state[name] = _step_bool(state[name], name)
         else:
-            state[name] = _step_analog(state[name], name)
+            state[name] = _step_analog(state[name], name, tag.get("unit"))
 
     return {
         "asset_id": asset_id,

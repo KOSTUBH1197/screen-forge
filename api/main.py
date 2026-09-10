@@ -54,6 +54,24 @@ def get_tags(asset_id: str):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@app.get("/context/{asset_id:path}")
+def get_machine_context(asset_id: str):
+    """
+    Return the machine context currently in memory for one asset, in exactly
+    the shape of contracts/fixtures/context.*.json.
+
+    /web reads contexts from the fixture files today, which is fine until a
+    context changes at runtime -- the Phase 4 demo bumps the chiller's
+    context_version and adds a tag. Reading it from here instead means /web
+    sees that bump, because this returns what the API is actually generating
+    and validating against, not what was on disk at build time.
+    """
+    try:
+        return context_store.get_context(asset_id)
+    except context_store.ContextNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @app.get("/health")
 def health():
     """Simple liveness check -- useful during integration to confirm the
