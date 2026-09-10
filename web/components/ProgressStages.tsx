@@ -12,7 +12,8 @@ export const STAGE_OF_ERROR: Record<string, number> = {
   generation: 2,
   schema: 3,
   whitelist: 3,
-  read_only: 3,
+  // /api refuses control requests while reading the request, before any generation.
+  read_only: 0,
 };
 
 export interface GenerationProgress {
