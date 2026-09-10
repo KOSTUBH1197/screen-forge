@@ -1,8 +1,8 @@
 # ScreenForge /web — renderer
 
 Owned by Person A (Kostubh). Renders a screen spec that conforms to
-`contracts/screen-spec.schema.json` (git tag `contracts-frozen`) at three panel
-classes. Layout comes only from `priority`, `size_hint` and `min_panel`.
+`contracts/screen-spec.schema.json` at three panel classes. Layout comes only
+from `priority`, `size_hint` and `min_panel`.
 
 ## Run
 
@@ -31,21 +31,28 @@ reads; anything else is reported on screen, never silently patched.
 {
   "asset_id": "line1.conveyorA",
   "context_version": "conveyorA@v3",
-  "timestamp": "2026-09-11T10:15:00Z",
+  "timestamp": 1788950100.25,
   "tags":   { "Motor_1_RunStatus": true, "Temperature_PV": 61.4 },
   "alarms": { "ALM_HT01": false, "ALM_LP01": false, "ALM_MT01": true }
 }
 ```
 
+`timestamp` may be Unix seconds (what the /api simulator sends) or ISO-8601 text.
 `alarms` maps every alarm id in the context to whether it is active; the alarm
 banner and severity colours depend on it. Comms health tags are booleans.
 
-**`POST /generate`** with `{ "prompt": string, "asset_id": string | null, "panel_class": "small" | "medium" | "large" }`:
+**`POST /generate`** with `{ "prompt": string, "asset_id": string | null, "panel_class": "small" | "medium" | "large" }`.
+`asset_id` is `null` when the operator leaves the machine on "detect from request".
 
 - Success: `{ "spec": <screen spec> }`, optionally with `"meta": {}`.
 - Failure, any HTTP status: `{ "error": "message" }` or, better,
-  `{ "error": { "stage": "intent" | "context" | "generation" | "schema" | "whitelist" | "read_only", "message": "...", "field": "/components/2/bind_tag" } }`.
+  `{ "error": { "stage": "intent" | "context" | "llm" | "schema" | "whitelist" | "read_only", "message": "...", "field": "..." } }`.
   `stage` decides which progress step turns red and the headline shown.
+- A FastAPI request-validation 422 (`{ "detail": [...] }`) is shown as "The API rejected the request".
+
+**Bindings the renderer draws** (schema on `main`, d4f634e): `alarm_banner` →
+`bind_alarms`, `comms_health` → `bind_device`, `nav_tile` → `bind_asset`,
+`status_indicator` / `gauge` / `trend` → `bind_tag`.
 
 Machine contexts are read from `contracts/fixtures` because the contract has no
 context endpoint.
