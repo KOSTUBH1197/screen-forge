@@ -137,6 +137,11 @@ class GenerateRequest(BaseModel):
     # shape instead of the agreed {"error": {...}} one.
     asset_id: str | None = None
     panel_class: str  # "small" | "medium" | "large"
+    # Optional, additive: the context_version the screen being replaced was
+    # built against. When /web regenerates a stale screen it passes the old
+    # version, and the generator says which signals are new so the new screen
+    # reflects the change. Omitting it behaves exactly as before.
+    since_context_version: str | None = None
 
 
 @app.post("/generate")
@@ -173,7 +178,10 @@ def generate(req: GenerateRequest):
     except context_store.ContextNotFoundError as e:
         return {"error": {"message": str(e), "stage": "context", "field": "asset_id"}}
 
-    spec, error = generator.generate_and_validate(req.prompt, asset_id, req.panel_class)
+    spec, error = generator.generate_and_validate(
+        req.prompt, asset_id, req.panel_class,
+        since_context_version=req.since_context_version,
+    )
     if error is not None:
         return {"error": error}
     return {"spec": spec}
