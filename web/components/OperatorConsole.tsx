@@ -42,17 +42,8 @@ interface GenerateOptions {
   assetId?: string | null;
   /** Set when this generation answers a context change, so the result can say so. */
   contextUpdate?: ReconcileReport | null;
-}
-
-// A regeneration that answers a context change says what the machine gained, so
-// the new screen can show it. Visible in the request text, never hidden.
-const ADDITIONS_NOTE = /\s*\(the machine now also has: [^)]*\)$/;
-
-function withContextAdditions(text: string, report: ReconcileReport | null): string {
-  const base = text.replace(ADDITIONS_NOTE, "");
-  const changes = report?.changes;
-  const added = changes ? [...changes.tags_added, ...changes.alarms_added, ...changes.comms_added] : [];
-  return added.length > 0 ? `${base} (the machine now also has: ${added.join(", ")})` : base;
+  /** The context_version the replaced screen was built for; /api then tells the model what's new. */
+  sinceContextVersion?: string;
 }
 
 function Segmented<T extends string>({
@@ -159,6 +150,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
           prompt: text,
           asset_id: options.assetId !== undefined ? options.assetId : target === "auto" ? null : target,
           panel_class: panel,
+          since_context_version: options.sinceContextVersion ?? null,
         });
         if (id !== runId.current) return;
 
@@ -222,16 +214,22 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
     if (autoRegenerated.current === staleKey) return;
     autoRegenerated.current = staleKey;
     void generate({
-      text: withContextAdditions(origin.prompt, reconcile.report),
+      text: origin.prompt,
       assetId: spec.asset_id,
       contextUpdate: reconcile.report,
+      sinceContextVersion: spec.context_version,
     });
-  }, [staleKey, reconcile, origin, running, generate, spec.asset_id]);
+  }, [staleKey, reconcile, origin, running, generate, spec.asset_id, spec.context_version]);
 
   const regenerateForContext = () => {
-    const text = withContextAdditions(origin.kind === "generated" ? origin.prompt : spec.title, reconcile?.report ?? null);
+    const text = origin.kind === "generated" ? origin.prompt : spec.title;
     setPrompt(text);
-    void generate({ text, assetId: spec.asset_id, contextUpdate: reconcile?.report ?? null });
+    void generate({
+      text,
+      assetId: spec.asset_id,
+      contextUpdate: reconcile?.report ?? null,
+      sinceContextVersion: spec.context_version,
+    });
   };
 
   // Voice: the transcript fills the request box as it is heard; a final result generates straight away.

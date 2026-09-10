@@ -43,6 +43,9 @@ banner and severity colours depend on it. Comms health tags are booleans.
 
 **`POST /generate`** with `{ "prompt": string, "asset_id": string | null, "panel_class": "small" | "medium" | "large" }`.
 `asset_id` is `null` when the operator leaves the machine on "detect from request".
+When /web regenerates a screen because its machine context changed, it adds
+`"since_context_version": "<version the old screen was built for>"` and sends the
+operator's request unchanged; /api then tells the model which signals are new.
 
 - Success: `{ "spec": <screen spec> }`, optionally with `"meta": {}`.
 - Failure, any HTTP status: `{ "error": "message" }` or, better,

@@ -86,6 +86,8 @@ export interface GenerateRequest {
   prompt: string;
   asset_id: string | null;
   panel_class: PanelClass;
+  /** When regenerating a stale screen: the version it was built for, so /api tells the model what's new. */
+  since_context_version?: string | null;
 }
 
 /**
