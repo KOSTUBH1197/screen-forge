@@ -142,6 +142,11 @@ class GenerateRequest(BaseModel):
     # version, and the generator says which signals are new so the new screen
     # reflects the change. Omitting it behaves exactly as before.
     since_context_version: str | None = None
+    # Optional, additive: the spec of the screen being replaced. Regeneration
+    # is otherwise stateless, so a screen regenerated after a sensor was added
+    # can come back with fewer components than the operator can currently see.
+    # Passing it keeps what's onscreen and adds the new signal alongside.
+    previous_spec: dict | None = None
 
 
 @app.post("/generate")
@@ -181,6 +186,7 @@ def generate(req: GenerateRequest):
     spec, error = generator.generate_and_validate(
         req.prompt, asset_id, req.panel_class,
         since_context_version=req.since_context_version,
+        previous_spec=req.previous_spec,
     )
     if error is not None:
         return {"error": error}
