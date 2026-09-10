@@ -101,7 +101,12 @@ def reset_context(asset_id: str):
 
 
 class ReconcileRequest(BaseModel):
-    spec: dict
+    # Typed loosely on purpose. The validate-a-spec panel is somewhere a judge
+    # can paste anything, and a bare string or a list would otherwise be
+    # rejected by FastAPI as a 422 {"detail": [...]} -- the one error shape
+    # /web has to special-case. Anything JSON reaches our own checks below and
+    # comes back in the agreed {"error": {...}} shape.
+    spec: object = None
 
 
 @app.post("/reconcile")
@@ -112,9 +117,21 @@ def reconcile(req: ReconcileRequest):
     stopped existing. Reports only -- never repairs the spec.
     """
     spec = req.spec
-    if not isinstance(spec, dict) or "asset_id" not in spec:
-        return {"error": {"message": "spec must be an object with an asset_id.",
-                          "stage": "schema", "field": "spec"}}
+    if not isinstance(spec, dict):
+        return {"error": {
+            "message": (
+                f"A screen spec must be a JSON object, got "
+                f"{type(spec).__name__}. Expected keys: screen_id, title, "
+                f"asset_id, context_version, components, permissions."
+            ),
+            "stage": "schema", "field": "spec"}}
+    if "asset_id" not in spec:
+        return {"error": {
+            "message": (
+                "This spec has no asset_id, so there is no machine context to "
+                f"check it against (known asset_ids: {context_store.list_asset_ids()})."
+            ),
+            "stage": "schema", "field": "asset_id"}}
     try:
         return reconciler.reconcile(spec)
     except context_store.ContextNotFoundError as e:
