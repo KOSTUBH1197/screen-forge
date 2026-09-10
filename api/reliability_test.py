@@ -51,32 +51,39 @@ RATE_LIMIT_DEFAULT_WAIT_S = 20.0
 CONVEYOR = "line1.conveyorA"
 CHILLER = "plant.utilities.chiller1"
 
-# (prompt, asset_id, panel_class, intent). Written the way operators actually
-# type, not tuned to be easy. "stress" prompts don't map cleanly onto one
-# component, ask for something the registry can't show, or imply control.
+# What a prompt SHOULD produce. Most prompts should produce a valid spec, but
+# a request to change the machine is correctly answered by the read-only gate
+# refusing it -- for those, a spec would be the wrong answer, so scoring them
+# as failures would push the number in exactly the wrong direction.
+EXPECT_SPEC = "spec"
+EXPECT_READ_ONLY = "read_only"
+
+# (prompt, asset_id, panel_class, intent, expect). Written the way operators
+# actually type, not tuned to be easy. "stress" prompts don't map cleanly onto
+# one component, ask for something the registry can't show, or imply control.
 PROMPTS = [
     # --- Conveyor A ---
-    ("Is motor 1 running right now?", CONVEYOR, "small", "status"),
-    ("I need the motor status and any alarms for the conveyor on one screen", CONVEYOR, "large", "status+alarms"),
-    ("temperature has been creeping up all shift, show me how it's trended", CONVEYOR, "medium", "trend"),
-    ("are the PLC and the drive still talking to us?", CONVEYOR, "small", "comms"),
-    ("what's going on with the conveyor", CONVEYOR, "medium", "vague"),
-    ("show me anything critical", CONVEYOR, "small", "vague"),
-    ("belt speed and pressure please, big numbers", CONVEYOR, "large", "status"),
-    ("I want to start the motor from here", CONVEYOR, "small", "stress: implies control"),
-    ("why did the line stop earlier?", CONVEYOR, "large", "stress: history/root cause"),
-    ("did someone hit the e-stop or open the door?", CONVEYOR, "medium", "stress: signals not in tags"),
+    ("Is motor 1 running right now?", CONVEYOR, "small", "status", EXPECT_SPEC),
+    ("I need the motor status and any alarms for the conveyor on one screen", CONVEYOR, "large", "status+alarms", EXPECT_SPEC),
+    ("temperature has been creeping up all shift, show me how it's trended", CONVEYOR, "medium", "trend", EXPECT_SPEC),
+    ("are the PLC and the drive still talking to us?", CONVEYOR, "small", "comms", EXPECT_SPEC),
+    ("what's going on with the conveyor", CONVEYOR, "medium", "vague", EXPECT_SPEC),
+    ("show me anything critical", CONVEYOR, "small", "vague", EXPECT_SPEC),
+    ("belt speed and pressure please, big numbers", CONVEYOR, "large", "status", EXPECT_SPEC),
+    ("I want to start the motor from here", CONVEYOR, "small", "stress: implies control", EXPECT_READ_ONLY),
+    ("why did the line stop earlier?", CONVEYOR, "large", "stress: history/root cause", EXPECT_SPEC),
+    ("did someone hit the e-stop or open the door?", CONVEYOR, "medium", "stress: signals not in tags", EXPECT_SPEC),
     # --- Chiller 1 ---
-    ("compressor running?", CHILLER, "small", "status"),
-    ("list all chiller alarms", CHILLER, "medium", "alarms"),
-    ("chiller overview: compressor status, pressures and alarms", CHILLER, "large", "status+alarms"),
-    ("trend chilled water supply and return temps over the last hour", CHILLER, "medium", "trend"),
-    ("is the BMS gateway online? check the VFD comms too", CHILLER, "large", "comms"),
-    ("is everything ok with the chiller", CHILLER, "small", "vague"),
-    ("refrigerant looks low, what should I be watching", CHILLER, "medium", "stress: open-ended"),
-    ("condenser pressure keeps spiking, give me what I need to keep an eye on it", CHILLER, "large", "stress: open-ended"),
-    ("compare supply vs return water temperature", CHILLER, "small", "stress: derived value"),
-    ("drop the compressor speed a bit", CHILLER, "medium", "stress: implies control"),
+    ("compressor running?", CHILLER, "small", "status", EXPECT_SPEC),
+    ("list all chiller alarms", CHILLER, "medium", "alarms", EXPECT_SPEC),
+    ("chiller overview: compressor status, pressures and alarms", CHILLER, "large", "status+alarms", EXPECT_SPEC),
+    ("trend chilled water supply and return temps over the last hour", CHILLER, "medium", "trend", EXPECT_SPEC),
+    ("is the BMS gateway online? check the VFD comms too", CHILLER, "large", "comms", EXPECT_SPEC),
+    ("is everything ok with the chiller", CHILLER, "small", "vague", EXPECT_SPEC),
+    ("refrigerant looks low, what should I be watching", CHILLER, "medium", "stress: open-ended", EXPECT_SPEC),
+    ("condenser pressure keeps spiking, give me what I need to keep an eye on it", CHILLER, "large", "stress: open-ended", EXPECT_SPEC),
+    ("compare supply vs return water temperature", CHILLER, "small", "stress: derived value", EXPECT_SPEC),
+    ("drop the compressor speed a bit", CHILLER, "medium", "stress: implies control", EXPECT_READ_ONLY),
 ]
 
 
@@ -96,7 +103,7 @@ def _retry_after_seconds(error: openai.RateLimitError) -> float:
         return RATE_LIMIT_DEFAULT_WAIT_S
 
 
-def run_one(prompt: str, asset_id: str, panel_class: str) -> dict:
+def run_one(prompt: str, asset_id: str, panel_class: str, expect: str) -> dict:
     llm_calls = 0
     rate_limit_waits = 0
 
@@ -124,9 +131,20 @@ def run_one(prompt: str, asset_id: str, panel_class: str) -> dict:
     elapsed = round(time.monotonic() - started, 2)
 
     success = spec is not None
+    stage = None if success else error.get("stage")
+
+    # "Correct" is not the same as "produced a spec": for a control request,
+    # the right answer is the read-only gate's refusal.
+    if expect == EXPECT_READ_ONLY:
+        correct = (not success) and stage == "read_only"
+    else:
+        correct = success
+
     return {
         "success": success,
-        "stage": None if success else error.get("stage"),
+        "expected": expect,
+        "correct": correct,
+        "stage": stage,
         "error_message": None if success else error.get("message"),
         "llm_calls": llm_calls,
         "retry_needed_to_succeed": (llm_calls > 1) if success else None,
@@ -151,25 +169,36 @@ def main() -> int:
     print(f"ScreenForge reliability test: {total} prompts, provider {provider}, model {model}, real LLM calls\n", flush=True)
 
     results = []
-    for i, (prompt, asset_id, panel_class, intent) in enumerate(PROMPTS, start=1):
-        outcome = run_one(prompt, asset_id, panel_class)
+    for i, (prompt, asset_id, panel_class, intent, expect) in enumerate(PROMPTS, start=1):
+        outcome = run_one(prompt, asset_id, panel_class, expect)
         results.append({"n": i, "prompt": prompt, "asset_id": asset_id, "panel_class": panel_class, "intent": intent, **outcome})
-        status = "PASS" if outcome["success"] else f"FAIL [{outcome['stage']}]"
+        if outcome["correct"]:
+            status = "PASS (read-only gate)" if expect == EXPECT_READ_ONLY else "PASS"
+        else:
+            status = f"FAIL [{outcome['stage'] or 'spec built, expected refusal'}]"
         calls = f"{outcome['llm_calls']} call{'s' if outcome['llm_calls'] != 1 else ''}"
         print(f"[{i:2}/{total}] {status:<22} {asset_id:<26} {panel_class:<6} {calls}, {outcome['seconds']}s  \"{prompt}\"", flush=True)
 
-    passed = [r for r in results if r["success"]]
-    failed = [r for r in results if not r["success"]]
+    passed = [r for r in results if r["correct"]]
+    failed = [r for r in results if not r["correct"]]
+    specs_built = [r for r in passed if r["success"]]
+    refusals = [r for r in passed if not r["success"]]
     pass_rate = len(passed) / total
     meets = len(passed) >= required
     by_stage = Counter(r["stage"] for r in failed)
-    first_try = sum(1 for r in passed if not r["retry_needed_to_succeed"])
+    first_try = sum(1 for r in specs_built if not r["retry_needed_to_succeed"])
     waits = sum(r["rate_limit_waits"] for r in results)
+    seconds = sorted(r["seconds"] for r in results)
+    median_s = seconds[len(seconds) // 2]
+    llm_seconds = sorted(r["seconds"] for r in results if r["llm_calls"] > 0)
 
     print("\n" + "=" * 78)
     print(f"MEETS THRESHOLD (>= {required}/{total})" if meets else f"BELOW THRESHOLD, needs work (need >= {required}/{total})")
-    print(f"{len(passed)} / {total} produced a valid spec ({pass_rate:.0%} pass rate)  [{provider}: {model}]")
-    print(f"Passed on the first LLM call: {first_try}; passed only after the internal retry: {len(passed) - first_try}")
+    print(f"{len(passed)} / {total} correct ({pass_rate:.0%})  [{provider}: {model}]")
+    print(f"  {len(specs_built)} valid specs built; {len(refusals)} control requests correctly refused by the read-only gate")
+    print(f"Passed on the first LLM call: {first_try}; passed only after the internal retry: {len(specs_built) - first_try}")
+    print(f"Seconds per prompt: median {median_s}s, slowest {seconds[-1]}s"
+          + (f"; median of LLM-backed prompts {llm_seconds[len(llm_seconds) // 2]}s" if llm_seconds else ""))
     if failed:
         print("Failures by stage: " + ", ".join(f"{n} failed at {stage}" for stage, n in by_stage.most_common()))
     else:
@@ -196,9 +225,13 @@ def main() -> int:
             "pass_rate": round(pass_rate, 3),
             "required_to_pass": required,
             "meets_threshold": meets,
-            "passed_after_retry": len(passed) - first_try,
+            "specs_built": len(specs_built),
+            "control_requests_refused": len(refusals),
+            "passed_after_retry": len(specs_built) - first_try,
             "failures_by_stage": dict(by_stage),
             "rate_limit_waits": waits,
+            "median_seconds": median_s,
+            "slowest_seconds": seconds[-1],
         },
         "results": results,
     }

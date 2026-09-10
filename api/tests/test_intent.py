@@ -59,3 +59,50 @@ def test_unresolvable_prompts_return_none(prompt):
     assert intent.resolve_asset_id(prompt) is None, (
         f"{prompt!r} should not resolve to any machine"
     )
+
+
+# --------------------------------------------------------------------------
+# Control-intent detection
+# --------------------------------------------------------------------------
+
+# Must be refused by the read-only gate.
+CONTROL = [
+    "I want to start the motor from here",
+    "drop the compressor speed a bit",
+    "stop the conveyor",
+    "please reset that trip",
+    "can I change the speed setpoint?",
+    "how do I increase the belt speed",
+    "give me a start button",
+    "let me turn the compressor off",
+    "add stop/start controls to this screen",
+]
+
+# Must NOT be refused: these only look like commands. Every one of these
+# contains a control verb, and getting any of them wrong would refuse a
+# perfectly normal monitoring request in front of a judge.
+NOT_CONTROL = [
+    "why did the line stop earlier?",              # asks about a past event
+    "did someone hit the e-stop or open the door?",  # e-stop is a signal name
+    "is motor 1 running right now?",
+    "show me anything critical",
+    "I need the motor status and any alarms for the conveyor on one screen",
+    "compare supply vs return water temperature",
+    "condenser pressure keeps spiking, give me what I need to keep an eye on it",
+    "trend chilled water supply and return temps over the last hour",
+    "was the compressor restarted overnight?",
+]
+
+
+@pytest.mark.parametrize("prompt", CONTROL)
+def test_control_requests_are_detected(prompt):
+    assert intent.control_request(prompt) is not None, (
+        f"{prompt!r} asks to change the machine and must hit the read-only gate"
+    )
+
+
+@pytest.mark.parametrize("prompt", NOT_CONTROL)
+def test_monitoring_requests_are_not_refused(prompt):
+    assert intent.control_request(prompt) is None, (
+        f"{prompt!r} is a monitoring request and must NOT be refused"
+    )

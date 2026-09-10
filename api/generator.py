@@ -35,6 +35,7 @@ from pathlib import Path
 from openai import OpenAI
 
 import context_store
+import intent
 import validator
 
 MODEL_NAME = "gpt-4o-mini"
@@ -207,10 +208,45 @@ def _call_llm(system_prompt: str, user_prompt: str) -> dict:
     return json.loads(response.choices[0].message.content)
 
 
+def _read_only_error(asset_id: str, prompt: str) -> dict:
+    """
+    The explanation an operator gets when they ask us to change something.
+
+    Written here in Python, never by the model: invariant 1 says the LLM
+    only ever emits spec JSON, so a refusal can't be something it authors.
+    Quotes the operator's own request back, and names a few real read tags
+    from the asset's context so the answer says what they CAN have, not just
+    what they can't.
+    """
+    try:
+        context = context_store.get_context(asset_id)
+        readable = [t["name"] for t in context["tags"] if t.get("access") != "write"]
+    except context_store.ContextNotFoundError:
+        readable = []
+
+    examples = ", ".join(readable[:3])
+    can_show = f" It can show you live values such as {examples}." if examples else ""
+
+    quoted = " ".join((prompt or "").split())
+    if len(quoted) > 70:
+        quoted = quoted[:67] + "..."
+
+    return {
+        "message": (
+            f"\"{quoted}\" asks to change the machine, and ScreenForge builds "
+            f"monitoring screens only. Every generated screen is read-only by "
+            f"design: it can display {asset_id}, but it cannot start, stop, or "
+            f"change anything on it.{can_show}"
+        ),
+        "stage": "read_only",
+        "field": None,
+    }
+
+
 def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_call_llm) -> tuple[dict | None, dict | None]:
     """
-    Full pipeline: call the LLM, clean it, validate it, retry once on
-    failure with the error appended, then give up.
+    Full pipeline: refuse control requests, then call the LLM, clean it,
+    validate it, retry once on failure with the error appended, then give up.
 
     llm_fn is injectable so tests can run this whole pipeline without a
     real network call -- production code should never need to pass it.
@@ -219,6 +255,12 @@ def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_
     where error_dict matches the agreed /generate error shape:
         { "message": str, "stage": str, "field": str | None }
     """
+    # The read-only gate runs BEFORE the LLM: a request to change the machine
+    # is answered with an explanation, not with a quiet monitoring screen
+    # that ignores what was actually asked. No tokens spent, no latency.
+    if intent.control_request(prompt):
+        return None, _read_only_error(asset_id, prompt)
+
     ctx = _context_for_prompt(asset_id)
     system_prompt = _build_system_prompt()
     base_user_prompt = (
