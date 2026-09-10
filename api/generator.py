@@ -312,7 +312,56 @@ def read_only_error(asset_id: str | None, prompt: str) -> dict:
     }
 
 
-def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_call_llm) -> tuple[dict | None, dict | None]:
+def _whats_new_note(asset_id: str, since_context_version: str | None) -> str:
+    """
+    A note naming what appeared on this machine since the version the operator
+    last saw, or "" when nothing did.
+
+    The model is already shown the full current context, so a newly added tag
+    is never missing from what it knows -- it just has no reason to prefer it.
+    "Chiller overview" describes the same screen whether or not a vibration
+    sensor was fitted this morning. This says which signals are new, so a
+    regenerated screen can reflect the change the operator is being told about.
+    """
+    if not since_context_version:
+        return ""
+
+    current = context_store.get_context(asset_id)
+    if since_context_version == current["context_version"]:
+        return ""
+
+    previous = context_store.get_version(asset_id, since_context_version)
+    if previous is None:
+        return ""
+
+    import reconciler  # local import: reconciler imports validator, not this
+
+    changes = reconciler.diff_contexts(previous, current)
+    added = changes["tags_added"] + changes["alarms_added"] + changes["comms_added"]
+    removed = changes["tags_removed"] + changes["alarms_removed"] + changes["comms_removed"]
+    if not added and not removed:
+        return ""
+
+    units = {t["name"]: t.get("unit") for t in current["tags"]}
+    described = ", ".join(
+        f"{name} ({units[name]})" if units.get(name) else name for name in added
+    )
+
+    lines = [f"\n\nThis machine changed since the operator last saw this screen "
+             f"({since_context_version} -> {current['context_version']})."]
+    if added:
+        lines.append(
+            f"Newly available: {described}. The operator is being shown this change, "
+            f"so include the new signal(s) in the screen unless the request is "
+            f"explicitly about something else."
+        )
+    if removed:
+        lines.append(f"No longer available, never bind these: {', '.join(removed)}.")
+    return "\n".join(lines)
+
+
+def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_call_llm,
+                          since_context_version: str | None = None) -> tuple[dict | None, dict | None]:
     """
     Full pipeline: refuse control requests, then call the LLM, clean it,
     validate it, retry once on failure with the error appended, then give up.
@@ -332,10 +381,13 @@ def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_
 
     ctx = _context_for_prompt(asset_id)
     system_prompt = _build_system_prompt()
+    # The operator's words go in verbatim. What changed on the machine is
+    # added as separate context, never spliced into their request.
     base_user_prompt = (
         f"Operator request: \"{prompt}\"\n"
         f"Target panel class: {panel_class}\n"
         f"Machine context:\n{json.dumps(ctx, indent=2)}"
+        f"{_whats_new_note(asset_id, since_context_version)}"
     )
 
     for attempt in range(2):  # first attempt + one retry
