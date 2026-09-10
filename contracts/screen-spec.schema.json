@@ -41,10 +41,41 @@
           "minItems": 1
         },
         "bind_device": { "type": "string" },
+        "bind_asset": { "type": "string" },
         "priority": { "type": "integer", "minimum": 1 },
         "size_hint": { "type": "string", "enum": ["compact", "medium", "wide"] },
         "min_panel": { "type": "string", "enum": ["small", "medium", "large"] }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "alarm_banner" } }, "required": ["type"] },
+          "then": {
+            "required": ["bind_alarms"],
+            "not": { "anyOf": [{ "required": ["bind_tag"] }, { "required": ["bind_device"] }, { "required": ["bind_asset"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "comms_health" } }, "required": ["type"] },
+          "then": {
+            "required": ["bind_device"],
+            "not": { "anyOf": [{ "required": ["bind_tag"] }, { "required": ["bind_alarms"] }, { "required": ["bind_asset"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "nav_tile" } }, "required": ["type"] },
+          "then": {
+            "required": ["bind_asset"],
+            "not": { "anyOf": [{ "required": ["bind_tag"] }, { "required": ["bind_alarms"] }, { "required": ["bind_device"] }] }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["status_indicator", "gauge", "trend"] } }, "required": ["type"] },
+          "then": {
+            "required": ["bind_tag"],
+            "not": { "anyOf": [{ "required": ["bind_alarms"] }, { "required": ["bind_device"] }, { "required": ["bind_asset"] }] }
+          }
+        }
+      ]
     }
   }
 }
