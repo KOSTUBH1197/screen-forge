@@ -262,7 +262,7 @@ def _call_llm(system_prompt: str, user_prompt: str) -> dict:
     return json.loads(response.choices[0].message.content)
 
 
-def _read_only_error(asset_id: str, prompt: str) -> dict:
+def read_only_error(asset_id: str | None, prompt: str) -> dict:
     """
     The explanation an operator gets when they ask us to change something.
 
@@ -271,26 +271,41 @@ def _read_only_error(asset_id: str, prompt: str) -> dict:
     Quotes the operator's own request back, and names a few real read tags
     from the asset's context so the answer says what they CAN have, not just
     what they can't.
-    """
-    try:
-        context = context_store.get_context(asset_id)
-        readable = [t["name"] for t in context["tags"] if t.get("access") != "write"]
-    except context_store.ContextNotFoundError:
-        readable = []
 
-    examples = ", ".join(readable[:3])
-    can_show = f" It can show you live values such as {examples}." if examples else ""
+    asset_id may be None: a control request is refused whether or not we
+    worked out which machine it was aimed at, so the refusal has to read
+    sensibly without one.
+    """
+    readable: list[str] = []
+    if asset_id:
+        try:
+            context = context_store.get_context(asset_id)
+            readable = [t["name"] for t in context["tags"] if t.get("access") != "write"]
+        except context_store.ContextNotFoundError:
+            readable = []
 
     quoted = " ".join((prompt or "").split())
     if len(quoted) > 70:
         quoted = quoted[:67] + "..."
 
+    if asset_id:
+        scope = (
+            f"Every generated screen is read-only by design: it can display "
+            f"{asset_id}, but it cannot start, stop, or change anything on it."
+        )
+    else:
+        scope = (
+            "Every generated screen is read-only by design: it can display a "
+            "machine, but it cannot start, stop, or change anything on it."
+        )
+
+    examples = ", ".join(readable[:3])
+    can_show = f" It can show you live values such as {examples}." if examples else ""
+
     return {
         "message": (
             f"\"{quoted}\" asks to change the machine, and ScreenForge builds "
-            f"monitoring screens only. Every generated screen is read-only by "
-            f"design: it can display {asset_id}, but it cannot start, stop, or "
-            f"change anything on it.{can_show}"
+            f"monitoring screens only. {scope}{can_show}"
         ),
         "stage": "read_only",
         "field": None,
@@ -313,7 +328,7 @@ def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_
     # is answered with an explanation, not with a quiet monitoring screen
     # that ignores what was actually asked. No tokens spent, no latency.
     if intent.control_request(prompt):
-        return None, _read_only_error(asset_id, prompt)
+        return None, read_only_error(asset_id, prompt)
 
     ctx = _context_for_prompt(asset_id)
     system_prompt = _build_system_prompt()

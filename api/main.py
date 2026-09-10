@@ -80,23 +80,26 @@ def generate(req: GenerateRequest):
     -- this endpoint itself always returns HTTP 200; the caller checks
     which key is present, per the agreed API contract in CLAUDE.md.
     """
-    asset_id = (req.asset_id or "").strip()
+    asset_id = (req.asset_id or "").strip() or intent.resolve_asset_id(req.prompt)
+
+    # The read-only gate goes FIRST, before we insist on knowing the machine.
+    # "start the motor" doesn't name an asset, and answering it with "which
+    # machine did you mean?" buries the real reason we won't do it.
+    if intent.control_request(req.prompt):
+        return {"error": generator.read_only_error(asset_id, req.prompt)}
 
     if not asset_id:
-        resolved = intent.resolve_asset_id(req.prompt)
-        if resolved is None:
-            return {
-                "error": {
-                    "message": (
-                        "Could not tell which machine this request is about. "
-                        f"Name the asset in the request, or pass asset_id "
-                        f"(known asset_ids: {context_store.list_asset_ids()})."
-                    ),
-                    "stage": "intent",
-                    "field": "asset_id",
-                }
+        return {
+            "error": {
+                "message": (
+                    "Could not tell which machine this request is about. "
+                    f"Name the asset in the request, or pass asset_id "
+                    f"(known asset_ids: {context_store.list_asset_ids()})."
+                ),
+                "stage": "intent",
+                "field": "asset_id",
             }
-        asset_id = resolved
+        }
 
     try:
         context_store.get_context(asset_id)
