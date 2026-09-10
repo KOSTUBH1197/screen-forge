@@ -1,0 +1,397 @@
+{
+  "run_at": "2026-09-10T19:24:38+00:00",
+  "provider": "groq",
+  "model": "openai/gpt-oss-120b",
+  "summary": {
+    "total": 20,
+    "passed": 20,
+    "pass_rate": 1.0,
+    "required_to_pass": 16,
+    "meets_threshold": true,
+    "passed_after_retry": 0,
+    "failures_by_stage": {},
+    "rate_limit_waits": 1
+  },
+  "results": [
+    {
+      "n": 1,
+      "prompt": "Is motor 1 running right now?",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "small",
+      "intent": "status",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 3.67,
+      "components": [
+        "status_indicator(Motor_1_RunStatus)"
+      ]
+    },
+    {
+      "n": 2,
+      "prompt": "I need the motor status and any alarms for the conveyor on one screen",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "large",
+      "intent": "status+alarms",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 2.32,
+      "components": [
+        "alarm_banner(ALM_HT01,ALM_LP01,ALM_MT01)",
+        "status_indicator(Motor_1_RunStatus)"
+      ]
+    },
+    {
+      "n": 3,
+      "prompt": "temperature has been creeping up all shift, show me how it's trended",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "medium",
+      "intent": "trend",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 1.71,
+      "components": [
+        "trend(Temperature_PV)"
+      ]
+    },
+    {
+      "n": 4,
+      "prompt": "are the PLC and the drive still talking to us?",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "small",
+      "intent": "comms",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 20.64,
+      "components": [
+        "comms_health(PLC1)",
+        "comms_health(VFD1)"
+      ]
+    },
+    {
+      "n": 5,
+      "prompt": "what's going on with the conveyor",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "medium",
+      "intent": "vague",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 23.11,
+      "components": [
+        "alarm_banner(ALM_HT01,ALM_LP01,ALM_MT01)",
+        "status_indicator(Motor_1_RunStatus)",
+        "gauge(Conveyor_Speed_SP)",
+        "trend(Temperature_PV)"
+      ]
+    },
+    {
+      "n": 6,
+      "prompt": "show me anything critical",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "small",
+      "intent": "vague",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 19.95,
+      "components": [
+        "alarm_banner(ALM_HT01)"
+      ]
+    },
+    {
+      "n": 7,
+      "prompt": "belt speed and pressure please, big numbers",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "large",
+      "intent": "status",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 20.14,
+      "components": [
+        "gauge(Conveyor_Speed_SP)",
+        "gauge(Pressure_Sensor)"
+      ]
+    },
+    {
+      "n": 8,
+      "prompt": "I want to start the motor from here",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "small",
+      "intent": "stress: implies control",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 1,
+      "seconds": 25.86,
+      "components": [
+        "alarm_banner(ALM_MT01,ALM_HT01)",
+        "status_indicator(Motor_1_RunStatus)",
+        "gauge(Conveyor_Speed_SP)",
+        "trend(Temperature_PV)",
+        "comms_health(PLC1)"
+      ]
+    },
+    {
+      "n": 9,
+      "prompt": "why did the line stop earlier?",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "large",
+      "intent": "stress: history/root cause",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 26.93,
+      "components": [
+        "alarm_banner(ALM_HT01,ALM_LP01,ALM_MT01)",
+        "status_indicator(Motor_1_RunStatus)",
+        "gauge(Conveyor_Speed_SP)",
+        "trend(Temperature_PV)",
+        "trend(Pressure_Sensor)",
+        "comms_health(PLC1)",
+        "comms_health(VFD1)"
+      ]
+    },
+    {
+      "n": 10,
+      "prompt": "did someone hit the e-stop or open the door?",
+      "asset_id": "line1.conveyorA",
+      "panel_class": "medium",
+      "intent": "stress: signals not in tags",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 24.65,
+      "components": [
+        "alarm_banner(ALM_MT01)",
+        "status_indicator(Motor_1_RunStatus)",
+        "comms_health(PLC1)",
+        "comms_health(VFD1)"
+      ]
+    },
+    {
+      "n": 11,
+      "prompt": "compressor running?",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "small",
+      "intent": "status",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 27.55,
+      "components": [
+        "status_indicator(Compressor_RunStatus)",
+        "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)"
+      ]
+    },
+    {
+      "n": 12,
+      "prompt": "list all chiller alarms",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "medium",
+      "intent": "alarms",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 21.88,
+      "components": [
+        "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)"
+      ]
+    },
+    {
+      "n": 13,
+      "prompt": "chiller overview: compressor status, pressures and alarms",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "large",
+      "intent": "status+alarms",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 16.83,
+      "components": [
+        "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)",
+        "status_indicator(Compressor_RunStatus)",
+        "gauge(Condenser_Pressure)",
+        "gauge(Evaporator_Pressure)"
+      ]
+    },
+    {
+      "n": 14,
+      "prompt": "trend chilled water supply and return temps over the last hour",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "medium",
+      "intent": "trend",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 21.89,
+      "components": [
+        "trend(Chilled_Water_Supply_Temp)",
+        "trend(Chilled_Water_Return_Temp)"
+      ]
+    },
+    {
+      "n": 15,
+      "prompt": "is the BMS gateway online? check the VFD comms too",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "large",
+      "intent": "comms",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 22.32,
+      "components": [
+        "comms_health(BMS_Gateway)",
+        "comms_health(Compressor_VFD)"
+      ]
+    },
+    {
+      "n": 16,
+      "prompt": "is everything ok with the chiller",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "small",
+      "intent": "vague",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 22.01,
+      "components": [
+        "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)",
+        "comms_health(BMS_Gateway)",
+        "comms_health(Compressor_VFD)"
+      ]
+    },
+    {
+      "n": 17,
+      "prompt": "refrigerant looks low, what should I be watching",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "medium",
+      "intent": "stress: open-ended",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 23.92,
+      "components": [
+        "alarm_banner(ALM_LR01)",
+        "gauge(Refrigerant_Level_PV)",
+        "status_indicator(Compressor_RunStatus)",
+        "trend(Condenser_Pressure)"
+      ]
+    },
+    {
+      "n": 18,
+      "prompt": "condenser pressure keeps spiking, give me what I need to keep an eye on it",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "large",
+      "intent": "stress: open-ended",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 11.17,
+      "components": [
+        "alarm_banner(ALM_HP01)",
+        "trend(Condenser_Pressure)",
+        "gauge(Condenser_Pressure)",
+        "status_indicator(Compressor_RunStatus)",
+        "comms_health(BMS_Gateway)",
+        "comms_health(Compressor_VFD)"
+      ]
+    },
+    {
+      "n": 19,
+      "prompt": "compare supply vs return water temperature",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "small",
+      "intent": "stress: derived value",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 24.84,
+      "components": [
+        "gauge(Chilled_Water_Supply_Temp)",
+        "gauge(Chilled_Water_Return_Temp)"
+      ]
+    },
+    {
+      "n": 20,
+      "prompt": "drop the compressor speed a bit",
+      "asset_id": "plant.utilities.chiller1",
+      "panel_class": "medium",
+      "intent": "stress: implies control",
+      "success": true,
+      "stage": null,
+      "error_message": null,
+      "llm_calls": 1,
+      "retry_needed_to_succeed": false,
+      "rate_limit_waits": 0,
+      "seconds": 22.18,
+      "components": [
+        "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)",
+        "status_indicator(Compressor_RunStatus)",
+        "comms_health(BMS_Gateway)",
+        "comms_health(Compressor_VFD)",
+        "trend(Condenser_Pressure)"
+      ]
+    }
+  ]
+}
