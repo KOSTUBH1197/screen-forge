@@ -104,6 +104,26 @@ _VIEW_GERUNDS = (
     "viewing", "looking",
 )
 
+# Alarms are usually something you LOOK at ("open alarms for the conveyor"),
+# but resetting or clearing one changes machine state. So alarm words count as
+# an interface object for navigation verbs only -- see _acts_on_the_interface.
+_ALARM_OBJECTS = {"alarm", "alarms"}
+_STATE_CHANGING_VERBS = {
+    "reset", "clear", "acknowledge", "ack", "silence", "start", "stop",
+    "restart", "enable", "disable", "override", "jog", "ramp",
+}
+
+# Words that turn "can you ... <verb>" into a question about the machine
+# rather than an instruction to it: "can you show me when the compressor will
+# start" asks what the compressor is going to do, it doesn't ask us to start
+# anything. Note "how"/"what" are absent on purpose -- "how do I start the
+# motor" IS a control request.
+_VIEW_VERBS = (
+    "show", "see", "display", "view", "list", "tell", "watch", "monitor",
+    "check", "know", "find", "graph", "plot",
+)
+_QUESTION_MARKERS = ("when", "whether", "will")
+
 # How far past the verb to look for its object.
 _OBJECT_WINDOW = 40
 
@@ -141,15 +161,35 @@ _COMPILED_VERB_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _VERB_PATTERNS]
 _COMPILED_AFFORDANCE_PATTERNS = [re.compile(p, re.IGNORECASE) for p in _AFFORDANCE_PATTERNS]
 
 
-def _acts_on_the_interface(text: str, verb_end: int) -> bool:
+def _trailing_verb(matched: str) -> str:
+    """The control verb a match ends on -- every pattern ends at its verb."""
+    words = re.findall(r"[a-z]+", matched)
+    return words[-1] if words else ""
+
+
+def _acts_on_the_interface(text: str, verb_end: int, verb: str) -> bool:
     """
     True when the object just after a control verb is part of the SCREEN
     rather than part of the machine -- "open the chiller overview" as opposed
     to "open the discharge valve".
     """
+    objects = set(_VIEW_OBJECTS) | set(_VIEW_GERUNDS)
+    if verb in _STATE_CHANGING_VERBS:
+        # "open alarms" displays them; "reset the alarm" changes the machine.
+        objects -= _ALARM_OBJECTS
+
     tail = text[verb_end:verb_end + _OBJECT_WINDOW]
-    words = re.findall(r"[a-z]+", tail)
-    return any(word in _VIEW_OBJECTS or word in _VIEW_GERUNDS for word in words)
+    return any(word in objects for word in re.findall(r"[a-z]+", tail))
+
+
+def _is_really_a_question(matched: str) -> bool:
+    """
+    True when the words leading up to the verb make this a question about the
+    machine instead of an instruction to it -- "can you show me when the
+    compressor will start".
+    """
+    words = re.findall(r"[a-z]+", matched)
+    return any(w in _VIEW_VERBS or w in _QUESTION_MARKERS for w in words)
 
 
 def control_request(prompt: str) -> str | None:
@@ -174,10 +214,15 @@ def control_request(prompt: str) -> str | None:
         if match:
             return match.group(0).strip()
 
-    # A control verb only counts if it acts on the machine, not the screen.
+    # A control verb only counts if it acts on the machine, not the screen,
+    # and only if it's being asked FOR rather than asked ABOUT.
     for pattern in _COMPILED_VERB_PATTERNS:
         for match in pattern.finditer(text):
-            if _acts_on_the_interface(text, match.end()):
+            matched = match.group(0)
+            verb = _trailing_verb(matched)
+            if _acts_on_the_interface(text, match.end(), verb):
                 continue  # this one is about the screen; keep looking
-            return match.group(0).strip()
+            if _is_really_a_question(matched):
+                continue  # asking what the machine does, not telling it to
+            return matched.strip()
     return None

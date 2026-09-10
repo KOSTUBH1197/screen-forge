@@ -76,6 +76,13 @@ CONTROL = [
     "give me a start button",
     "let me turn the compressor off",
     "add stop/start controls to this screen",
+    # The four Kostubh listed as "must still be refused". The last one is why
+    # alarm words only count as an interface object for navigation verbs:
+    # you open alarms to look at them, you reset one to change the machine.
+    "I want to start the motor from here",
+    "drop the compressor speed a bit",
+    "stop the conveyor",
+    "can you reset the high temperature alarm",
     "open the discharge valve",
     "close the bypass valve",
     "set the speed setpoint to 50",
@@ -103,9 +110,18 @@ NOT_CONTROL = [
     "condenser pressure keeps spiking, give me what I need to keep an eye on it",
     "trend chilled water supply and return temps over the last hour",
     "was the compressor restarted overnight?",
+    # The six Kostubh verified as wrongly refused. "can you show me when the
+    # compressor will start" is the odd one out: the object check doesn't save
+    # it (the object IS the compressor), but "show me ... when ... will" makes
+    # it a question about the machine, not an instruction to it.
+    "open the chiller overview",
+    "set up a screen for the conveyor alarms",
+    "turn on the trend view for condenser pressure",
+    "close up view of motor 1",
+    "lower half of the screen should show alarms",
+    "can you show me when the compressor will start",
     # Every control verb is also an ordinary verb for working a SCREEN. These
     # all used to be refused: the object, not the verb, is what decides.
-    "open the chiller overview",
     "open the conveyor screen",
     "open up the trend for temperature",
     "open alarms for the conveyor",
