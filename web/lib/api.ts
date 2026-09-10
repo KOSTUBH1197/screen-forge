@@ -2,7 +2,7 @@
 //   POST /generate { prompt, asset_id, panel_class } -> { spec } | { error }
 //   GET  /tags/{asset_id} -> live values
 
-import type { GenerateResponse, PanelClass, ScreenSpec } from "./spec";
+import type { GenerateResponse, MachineContext, PanelClass, ReconcileReport, ScreenSpec } from "./spec";
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
 
@@ -48,6 +48,38 @@ export function tagsSnapshotProblem(value: unknown, assetId: string): string | n
   if (typeof value.context_version !== "string") return "it has no context_version";
   if (typeof value.timestamp !== "string" && typeof value.timestamp !== "number") return "it has no timestamp";
   return null;
+}
+
+/** GET /context/{asset_id}: the context the API is generating against right now. */
+export async function fetchContext(assetId: string): Promise<MachineContext> {
+  const res = await request(`/context/${encodeURIComponent(assetId)}`, { headers: { Accept: "application/json" } }, 3000);
+  if (!res.ok) throw new Error(`GET /context returned HTTP ${res.status}.`);
+  const body: unknown = await res.json();
+  const ok =
+    isObject(body) &&
+    body.asset_id === assetId &&
+    typeof body.context_version === "string" &&
+    Array.isArray(body.tags) &&
+    Array.isArray(body.alarms) &&
+    Array.isArray(body.comms) &&
+    Array.isArray(body.asset_hierarchy);
+  if (!ok) throw new Error("GET /context returned something that is not a machine context.");
+  return body as unknown as MachineContext;
+}
+
+/** POST /reconcile: what changed since a screen was built, and which of its bindings no longer exist. */
+export async function reconcileScreen(spec: ScreenSpec): Promise<ReconcileReport> {
+  const res = await request(
+    "/reconcile",
+    { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ spec }) },
+    5000,
+  );
+  const body: unknown = await res.json().catch(() => null);
+  if (isObject(body) && typeof body.stale === "boolean" && Array.isArray(body.broken_bindings)) {
+    return body as unknown as ReconcileReport;
+  }
+  const message = isObject(body) && isObject(body.error) && typeof body.error.message === "string" ? body.error.message : `HTTP ${res.status}`;
+  throw new Error(`/reconcile failed: ${message}`);
 }
 
 export interface GenerateRequest {

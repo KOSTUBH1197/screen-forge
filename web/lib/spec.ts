@@ -105,3 +105,35 @@ export interface AssetSummary {
   name: string;
   context_version: string;
 }
+
+/** What changed between two context versions (api/reconciler.py diff_contexts). */
+export interface ContextChanges {
+  from_version: string;
+  to_version: string;
+  tags_added: string[];
+  tags_removed: string[];
+  alarms_added: string[];
+  alarms_removed: string[];
+  comms_added: string[];
+  comms_removed: string[];
+}
+
+export interface BrokenBinding {
+  component_id: string;
+  component_type: string;
+  field: string;
+  value: string;
+  reason: string;
+}
+
+/** Response body of POST /reconcile { spec }. A report only; the spec is never repaired. */
+export interface ReconcileReport {
+  asset_id: string;
+  spec_context_version: string;
+  current_context_version: string;
+  stale: boolean;
+  changes: ContextChanges | null;
+  broken_bindings: BrokenBinding[];
+  still_valid: boolean;
+  errors: string[];
+}

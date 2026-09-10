@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { API_BASE, ApiUnreachableError, generateScreen } from "@/lib/api";
-import { FIXTURE_ASSETS, FIXTURE_CONTEXTS, GOLDEN_SPECS } from "@/lib/contracts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { API_BASE, ApiUnreachableError, generateScreen, reconcileScreen } from "@/lib/api";
+import { FIXTURE_ASSETS, GOLDEN_SPECS } from "@/lib/contracts";
 import { PANEL_CLASSES, PANEL_RULES } from "@/lib/layout";
-import type { PanelClass, ScreenSpec, SpecComponent } from "@/lib/spec";
+import type { PanelClass, ReconcileReport, ScreenSpec, SpecComponent } from "@/lib/spec";
 import { useLiveTags, type TagSource } from "@/lib/useLiveTags";
+import { useMachineContext } from "@/lib/useMachineContext";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
+import { ContextUpdateBanner } from "./ContextUpdateBanner";
 import { ErrorCard, type ConsoleError } from "./ErrorCard";
 import { PANEL_NOMINAL_WIDTH, PanelFrame } from "./PanelFrame";
 import {
@@ -31,7 +33,16 @@ type ViewMode = "single" | "side-by-side";
 
 type Origin =
   | { kind: "golden"; key: string; file: string }
-  | { kind: "generated"; prompt: string; elapsedMs: number };
+  | { kind: "generated"; prompt: string; elapsedMs: number; contextUpdate: ReconcileReport | null };
+
+interface GenerateOptions {
+  /** Text to send instead of what is in the request box (voice, regeneration). */
+  text?: string;
+  /** Asset to send instead of the machine picker's choice. */
+  assetId?: string | null;
+  /** Set when this generation answers a context change, so the result can say so. */
+  contextUpdate?: ReconcileReport | null;
+}
 
 function Segmented<T extends string>({
   label,
@@ -102,64 +113,111 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
   const [error, setError] = useState<ConsoleError | null>(null);
   const runId = useRef(0);
 
-  // Machine contexts come from the frozen fixtures; the contract has no context endpoint.
-  const context = FIXTURE_CONTEXTS[spec.asset_id] ?? null;
+  // The context comes from GET /context when /api is up, else from the frozen fixtures.
+  const { context, refresh: refreshContext } = useMachineContext(spec.asset_id);
   const { live, source: tagSource, problem: tagsProblem } = useLiveTags(context);
   const running = progress.status === "running";
 
-  const generate = useCallback(async (spoken?: string) => {
-    const text = (spoken ?? prompt).trim();
-    if (!text) return;
-    const id = ++runId.current;
-    const started = performance.now();
-    setError(null);
-    setProgress({ status: "running", active: 0, failed: null, elapsedMs: null });
+  // /tags reports the context_version the API is running now. When it moves, load that context.
+  const liveVersion = live.snapshot?.context_version ?? null;
+  useEffect(() => {
+    if (context && liveVersion && liveVersion !== context.context_version) refreshContext();
+  }, [context, liveVersion, refreshContext]);
 
-    // /generate is one request, so the first stages advance on a timer while it runs.
-    const advance = (stage: number) =>
-      setProgress((p) => (id === runId.current && p.status === "running" && p.active < stage ? { ...p, active: stage } : p));
-    const timers = [window.setTimeout(() => advance(1), 700), window.setTimeout(() => advance(2), 1500)];
+  const generate = useCallback(
+    async (options: GenerateOptions = {}) => {
+      const text = (options.text ?? prompt).trim();
+      if (!text) return;
+      const id = ++runId.current;
+      const started = performance.now();
+      setError(null);
+      setProgress({ status: "running", active: 0, failed: null, elapsedMs: null });
 
-    try {
-      const result = await generateScreen({
-        prompt: text,
-        asset_id: target === "auto" ? null : target,
-        panel_class: panel,
-      });
-      if (id !== runId.current) return;
+      // /generate is one request, so the first stages advance on a timer while it runs.
+      const advance = (stage: number) =>
+        setProgress((p) => (id === runId.current && p.status === "running" && p.active < stage ? { ...p, active: stage } : p));
+      const timers = [window.setTimeout(() => advance(1), 700), window.setTimeout(() => advance(2), 1500)];
 
-      if ("error" in result) {
-        const stage = result.error.stage;
-        const failed = (stage !== undefined ? STAGE_OF_ERROR[stage] : undefined) ?? STAGES.length - 1;
-        setProgress({ status: "failed", active: failed, failed, elapsedMs: performance.now() - started });
-        setError({ kind: "api", error: result.error });
-        return;
+      try {
+        const result = await generateScreen({
+          prompt: text,
+          asset_id: options.assetId !== undefined ? options.assetId : target === "auto" ? null : target,
+          panel_class: panel,
+        });
+        if (id !== runId.current) return;
+
+        if ("error" in result) {
+          const stage = result.error.stage;
+          const failed = (stage !== undefined ? STAGE_OF_ERROR[stage] : undefined) ?? STAGES.length - 1;
+          setProgress({ status: "failed", active: failed, failed, elapsedMs: performance.now() - started });
+          setError({ kind: "api", error: result.error });
+          return;
+        }
+
+        advance(3);
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
+        if (id !== runId.current) return;
+        const elapsedMs = performance.now() - started;
+        setSpec(result.spec);
+        setOrigin({ kind: "generated", prompt: text, elapsedMs, contextUpdate: options.contextUpdate ?? null });
+        setProgress({ status: "done", active: STAGES.length, failed: null, elapsedMs });
+      } catch (e) {
+        if (id !== runId.current) return;
+        setProgress(IDLE_PROGRESS);
+        setError(
+          e instanceof ApiUnreachableError
+            ? { kind: "unreachable", message: e.message }
+            : { kind: "client", message: e instanceof Error ? e.message : String(e) },
+        );
+      } finally {
+        timers.forEach((t) => window.clearTimeout(t));
       }
+    },
+    [prompt, target, panel],
+  );
 
-      advance(3);
-      await new Promise((resolve) => window.setTimeout(resolve, 350));
-      if (id !== runId.current) return;
-      const elapsedMs = performance.now() - started;
-      setSpec(result.spec);
-      setOrigin({ kind: "generated", prompt: text, elapsedMs });
-      setProgress({ status: "done", active: STAGES.length, failed: null, elapsedMs });
-    } catch (e) {
-      if (id !== runId.current) return;
-      setProgress(IDLE_PROGRESS);
-      setError(
-        e instanceof ApiUnreachableError
-          ? { kind: "unreachable", message: e.message }
-          : { kind: "client", message: e instanceof Error ? e.message : String(e) },
-      );
-    } finally {
-      timers.forEach((t) => window.clearTimeout(t));
-    }
-  }, [prompt, target, panel]);
+  // A screen built against an older context: ask /api what changed and which bindings broke.
+  const staleKey =
+    context && context.context_version !== spec.context_version
+      ? `${spec.screen_id}|${spec.context_version}|${context.context_version}`
+      : null;
+  const [reconciled, setReconciled] = useState<{ key: string; report: ReconcileReport | null; failed: boolean } | null>(null);
+  useEffect(() => {
+    if (!staleKey) return;
+    let cancelled = false;
+    reconcileScreen(spec).then(
+      (report) => {
+        if (!cancelled) setReconciled({ key: staleKey, report, failed: false });
+      },
+      () => {
+        if (!cancelled) setReconciled({ key: staleKey, report: null, failed: true });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [staleKey, spec]);
+  const reconcile = reconciled && reconciled.key === staleKey ? reconciled : null;
+
+  // A generated screen follows its machine automatically; a golden screen waits for the operator.
+  const autoRegenerated = useRef<string | null>(null);
+  useEffect(() => {
+    if (!staleKey || !reconcile || origin.kind !== "generated" || running) return;
+    if (autoRegenerated.current === staleKey) return;
+    autoRegenerated.current = staleKey;
+    void generate({ text: origin.prompt, assetId: spec.asset_id, contextUpdate: reconcile.report });
+  }, [staleKey, reconcile, origin, running, generate, spec.asset_id]);
+
+  const regenerateForContext = () => {
+    const text = origin.kind === "generated" ? origin.prompt : spec.title;
+    setPrompt(text);
+    void generate({ text, assetId: spec.asset_id, contextUpdate: reconcile?.report ?? null });
+  };
 
   // Voice: the transcript fills the request box as it is heard; a final result generates straight away.
   const voice = useSpeechRecognition((text, isFinal) => {
     setPrompt(text);
-    if (isFinal && text) void generate(text);
+    if (isFinal && text) void generate({ text });
   });
 
   const loadGolden = (key: string) => {
@@ -180,8 +238,6 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
     setPrompt(`Overview of ${asset.name}`);
     document.getElementById("prompt")?.focus();
   };
-
-  const versionDrift = context !== null && context.context_version !== spec.context_version;
 
   return (
     <main className="mx-auto flex w-full max-w-[1920px] flex-col gap-4 px-4 py-5 md:px-6">
@@ -328,17 +384,26 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
         <span className="numeral">{spec.asset_id}</span>
       </p>
 
-      {versionDrift && (
-        <p role="status" className="rounded-lg border border-cell-border bg-surface px-4 py-2 text-sm text-text">
-          This screen was built against <span className="numeral">{spec.context_version}</span>, but the machine context is now{" "}
-          <span className="numeral">{context.context_version}</span>. Regenerate to pick up the change.
-        </p>
-      )}
+      <ContextUpdateBanner
+        stale={
+          staleKey && context
+            ? {
+                from: spec.context_version,
+                to: context.context_version,
+                report: reconcile?.report ?? null,
+                reportFailed: reconcile?.failed ?? false,
+              }
+            : null
+        }
+        regenerated={origin.kind === "generated" ? origin.contextUpdate : null}
+        running={running}
+        onRegenerate={regenerateForContext}
+      />
 
       {!context && (
         <p role="alert" className="rounded-lg border border-sev-1/70 bg-cell px-4 py-3 text-sm text-text">
-          No machine context for <span className="numeral">{spec.asset_id}</span> in contracts/fixtures. The screen
-          can&apos;t be rendered without it.
+          No machine context for <span className="numeral">{spec.asset_id}</span> from the API or contracts/fixtures. The
+          screen can&apos;t be rendered without it.
         </p>
       )}
 
