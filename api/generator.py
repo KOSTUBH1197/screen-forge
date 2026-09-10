@@ -369,5 +369,8 @@ def generate_and_validate(prompt: str, asset_id: str, panel_class: str, llm_fn=_
             "field": None,
         }
 
-    # Unreachable, but keeps type checkers happy.
-    return None, {"message": "Unknown generation failure.", "stage": "other", "field": None}
+    # Unreachable, but keeps type checkers happy. "llm" rather than "other"
+    # because those six stages are the ones web/README.md says /web can
+    # render; an unknown stage would leave the progress indicator with no
+    # step to mark red.
+    return None, {"message": "Unknown generation failure.", "stage": "llm", "field": None}
