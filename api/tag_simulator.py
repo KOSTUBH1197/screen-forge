@@ -42,6 +42,10 @@ _BASELINES = {
     # baseline and dips below the alarm threshold now and then, which is the
     # behaviour worth showing.
     "Refrigerant_Level_PV": {"baseline": 85.0, "normal_swing": 2.0, "excursion_chance": 0.015, "excursion_swing": -40.0},
+    # Added to the chiller at runtime by the machine-change demo. Profiled
+    # here so it reads like a real sensor the moment it appears, rather than
+    # falling back to the flat default.
+    "Vibration_PV": {"baseline": 2.4, "normal_swing": 0.25, "excursion_chance": 0.04, "excursion_swing": 4.0},
 }
 
 # Fallback for any analog tag we didn't hand-tune above (e.g. health tags
@@ -60,6 +64,7 @@ _UNIT_LIMITS: dict[str, tuple[float | None, float | None]] = {
     "kpa": (0.0, None),
     "psi": (0.0, None),
     "m/s": (0.0, None),
+    "mm/s": (0.0, None),
     "rpm": (0.0, None),
     "hz": (0.0, None),
 }
@@ -98,19 +103,35 @@ _ALARM_CONDITIONS = {
 _STATE: dict[str, dict[str, float | bool]] = {}
 
 
-def _init_state_for_asset(asset_id: str) -> None:
-    ctx = context_store.get_context(asset_id)
-    state = {}
+def _starting_value(tag: dict) -> float | bool:
+    """The value a tag begins life at, whether at startup or mid-run."""
+    if tag["type"] == "bool":
+        return "Health" in tag["name"] or tag["name"] in _BOOL_STARTS_TRUE
+    return _BASELINES.get(tag["name"], _DEFAULT_ANALOG)["baseline"]
+
+
+def _sync_state_to_context(asset_id: str, ctx: dict) -> dict:
+    """
+    Bring the in-memory state in line with the context as it is RIGHT NOW,
+    adding tags that have appeared and dropping ones that have gone.
+
+    A context can change while the simulation is running -- that's the whole
+    point of the machine-change demo -- and the state dict was built from the
+    context as it looked at the first call. Without this, the first poll after
+    a bump raises KeyError on the newly added tag.
+    """
+    state = _STATE.setdefault(asset_id, {})
+    current_names = set()
+
     for tag in ctx["tags"]:
-        if tag["type"] == "bool":
-            if "Health" in tag["name"] or tag["name"] in _BOOL_STARTS_TRUE:
-                state[tag["name"]] = True
-            else:
-                state[tag["name"]] = False
-        else:
-            profile = _BASELINES.get(tag["name"], _DEFAULT_ANALOG)
-            state[tag["name"]] = profile["baseline"]
-    _STATE[asset_id] = state
+        current_names.add(tag["name"])
+        if tag["name"] not in state:
+            state[tag["name"]] = _starting_value(tag)
+
+    for gone in set(state) - current_names:
+        del state[gone]
+
+    return state
 
 
 def _evaluate_alarms(ctx: dict, state: dict) -> dict[str, bool]:
@@ -166,11 +187,8 @@ def get_live_values(asset_id: str) -> dict:
     advancing the simulation by one step. Initializes state on first call
     for a given asset.
     """
-    if asset_id not in _STATE:
-        _init_state_for_asset(asset_id)
-
     ctx = context_store.get_context(asset_id)
-    state = _STATE[asset_id]
+    state = _sync_state_to_context(asset_id, ctx)
 
     for tag in ctx["tags"]:
         name = tag["name"]

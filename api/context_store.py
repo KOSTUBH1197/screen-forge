@@ -54,6 +54,23 @@ def _load_all_contexts() -> dict:
 # FastAPI app starts up).
 _CONTEXTS = _load_all_contexts()
 
+# Every version of a context we have ever held, asset_id -> version -> context.
+# The reconciler needs the OLD context to say what changed, and a screen only
+# carries the version string it was built against -- not the context itself.
+_HISTORY: dict[str, dict[str, dict]] = {
+    asset_id: {ctx["context_version"]: ctx} for asset_id, ctx in _CONTEXTS.items()
+}
+
+
+def remember_version(context: dict) -> None:
+    """Record a context under its version, so it can be diffed against later."""
+    _HISTORY.setdefault(context["asset_id"], {})[context["context_version"]] = context
+
+
+def get_version(asset_id: str, context_version: str) -> dict | None:
+    """A previously seen version of a context, or None if we never held it."""
+    return _HISTORY.get(asset_id, {}).get(context_version)
+
 
 def list_asset_ids() -> list[str]:
     """Return every asset_id we currently have a context for."""
@@ -75,7 +92,30 @@ def get_context(asset_id: str) -> dict:
 
 def reload_context(asset_id: str, new_context: dict) -> None:
     """
-    Replace one context in memory (used later by the reconciler when a
-    context_version bumps). Not needed yet -- just here so the shape exists.
+    Replace one context in memory. Used by the reconciler when a
+    context_version bumps at runtime.
     """
     _CONTEXTS[asset_id] = new_context
+    remember_version(new_context)
+
+
+def reset_context(asset_id: str) -> dict:
+    """
+    Put one context back exactly as it is on disk, undoing any runtime bump.
+
+    The demo gets rehearsed several times and then performed, and each run
+    needs to start from chiller1@v1 -- without this, the second run has
+    nothing left to add. Re-reads the file rather than keeping a copy, so it
+    also picks up any edit made to the fixture in between.
+    """
+    for file_path in sorted(FIXTURES_DIR.glob(f"{CONTEXT_FILE_PREFIX}*.json")):
+        with open(file_path, "r") as f:
+            data = json.load(f)
+        if data["asset_id"] == asset_id:
+            _CONTEXTS[asset_id] = data
+            return data
+
+    raise ContextNotFoundError(
+        f"No machine context file on disk for asset_id='{asset_id}'. "
+        f"Known asset_ids: {list_asset_ids()}"
+    )

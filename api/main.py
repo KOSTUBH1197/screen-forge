@@ -21,6 +21,7 @@ import context_store
 import tag_simulator
 import generator
 import intent
+import reconciler
 
 app = FastAPI(title="ScreenForge API")
 
@@ -70,6 +71,54 @@ def get_machine_context(asset_id: str):
         return context_store.get_context(asset_id)
     except context_store.ContextNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/context/{asset_id:path}/bump")
+def bump_context(asset_id: str):
+    """
+    The machine change, on demand: add a sensor to a context at runtime and
+    move its context_version on. /tags and /context report the new version
+    immediately, which is what tells /web the screen is stale.
+    """
+    try:
+        context_store.get_context(asset_id)
+    except context_store.ContextNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return reconciler.bump_context(asset_id)
+
+
+@app.post("/context/{asset_id:path}/reset")
+def reset_context(asset_id: str):
+    """
+    Put a context back to the version on disk, undoing a bump. The demo gets
+    rehearsed repeatedly and each run has to start from the original version.
+    """
+    try:
+        context = context_store.reset_context(asset_id)
+    except context_store.ContextNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"context_version": context["context_version"], "context": context}
+
+
+class ReconcileRequest(BaseModel):
+    spec: dict
+
+
+@app.post("/reconcile")
+def reconcile(req: ReconcileRequest):
+    """
+    Check an existing screen against the machine context as it stands now:
+    what changed since it was built, and whether any of its bindings have
+    stopped existing. Reports only -- never repairs the spec.
+    """
+    spec = req.spec
+    if not isinstance(spec, dict) or "asset_id" not in spec:
+        return {"error": {"message": "spec must be an object with an asset_id.",
+                          "stage": "schema", "field": "spec"}}
+    try:
+        return reconciler.reconcile(spec)
+    except context_store.ContextNotFoundError as e:
+        return {"error": {"message": str(e), "stage": "context", "field": "asset_id"}}
 
 
 @app.get("/health")
