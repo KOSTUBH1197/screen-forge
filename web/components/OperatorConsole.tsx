@@ -6,6 +6,7 @@ import { FIXTURE_ASSETS, FIXTURE_CONTEXTS, GOLDEN_SPECS } from "@/lib/contracts"
 import { PANEL_CLASSES, PANEL_RULES } from "@/lib/layout";
 import type { PanelClass, ScreenSpec, SpecComponent } from "@/lib/spec";
 import { useLiveTags, type TagSource } from "@/lib/useLiveTags";
+import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 import { ErrorCard, type ConsoleError } from "./ErrorCard";
 import { PANEL_NOMINAL_WIDTH, PanelFrame } from "./PanelFrame";
 import {
@@ -17,6 +18,7 @@ import {
 } from "./ProgressStages";
 import { ScaleToFit } from "./ScaleToFit";
 import { ScreenRenderer } from "./ScreenRenderer";
+import { VoiceButton } from "./VoiceButton";
 
 const EXAMPLE_PROMPTS = [
   "Show conveyor A motor status and active alarms",
@@ -105,8 +107,8 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
   const { live, source: tagSource, problem: tagsProblem } = useLiveTags(context);
   const running = progress.status === "running";
 
-  const generate = useCallback(async () => {
-    const text = prompt.trim();
+  const generate = useCallback(async (spoken?: string) => {
+    const text = (spoken ?? prompt).trim();
     if (!text) return;
     const id = ++runId.current;
     const started = performance.now();
@@ -153,6 +155,12 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
       timers.forEach((t) => window.clearTimeout(t));
     }
   }, [prompt, target, panel]);
+
+  // Voice: the transcript fills the request box as it is heard; a final result generates straight away.
+  const voice = useSpeechRecognition((text, isFinal) => {
+    setPrompt(text);
+    if (isFinal && text) void generate(text);
+  });
 
   const loadGolden = (key: string) => {
     const golden = GOLDEN_SPECS.find((g) => g.key === key);
@@ -215,7 +223,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
                   void generate();
                 }
               }}
-              placeholder="e.g. Show me the conveyor motor status and any active alarms"
+              placeholder={voice.listening ? "Listening… say what you need to see" : "e.g. Show me the conveyor motor status and any active alarms"}
               className="min-h-14 flex-1 resize-y rounded-lg border border-cell-border bg-bg px-3 py-2 text-lg text-text placeholder:text-faint focus:border-neutral-fill focus:outline-none"
             />
             <div className="flex flex-wrap gap-3 lg:w-64 lg:flex-col">
@@ -232,15 +240,23 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
                   </option>
                 ))}
               </select>
-              <button
-                type="submit"
-                disabled={running || prompt.trim() === ""}
-                className="flex-1 rounded-lg bg-neutral-fill px-5 py-2.5 text-base font-bold text-bezel hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 lg:flex-none"
-              >
-                {running ? "Generating…" : "Generate screen"}
-              </button>
+              <div className="flex flex-1 gap-3 lg:flex-none">
+                <VoiceButton supported={voice.supported} listening={voice.listening} onStart={voice.start} onStop={voice.stop} />
+                <button
+                  type="submit"
+                  disabled={running || prompt.trim() === ""}
+                  className="flex-1 rounded-lg bg-neutral-fill px-5 py-2.5 text-base font-bold text-bezel hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {running ? "Generating…" : "Generate screen"}
+                </button>
+              </div>
             </div>
           </div>
+          {voice.error && (
+            <p role="status" className="text-sm text-muted">
+              {voice.error}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             {EXAMPLE_PROMPTS.map((example) => (
               <button
