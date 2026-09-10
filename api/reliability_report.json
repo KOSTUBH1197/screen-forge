@@ -1,16 +1,21 @@
 {
-  "run_at": "2026-09-10T19:24:38+00:00",
+  "run_at": "2026-09-10T20:27:18+00:00",
   "provider": "groq",
   "model": "openai/gpt-oss-120b",
+  "reasoning_effort": "low",
   "summary": {
     "total": 20,
     "passed": 20,
     "pass_rate": 1.0,
     "required_to_pass": 16,
     "meets_threshold": true,
+    "specs_built": 18,
+    "control_requests_refused": 2,
     "passed_after_retry": 0,
     "failures_by_stage": {},
-    "rate_limit_waits": 1
+    "rate_limit_waits": 1,
+    "median_seconds": 18.33,
+    "slowest_seconds": 26.21
   },
   "results": [
     {
@@ -20,12 +25,14 @@
       "panel_class": "small",
       "intent": "status",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 3.67,
+      "seconds": 1.39,
       "components": [
         "status_indicator(Motor_1_RunStatus)"
       ]
@@ -37,12 +44,14 @@
       "panel_class": "large",
       "intent": "status+alarms",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 2.32,
+      "seconds": 1.38,
       "components": [
         "alarm_banner(ALM_HT01,ALM_LP01,ALM_MT01)",
         "status_indicator(Motor_1_RunStatus)"
@@ -55,12 +64,14 @@
       "panel_class": "medium",
       "intent": "trend",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 1.71,
+      "seconds": 1.07,
       "components": [
         "trend(Temperature_PV)"
       ]
@@ -72,12 +83,14 @@
       "panel_class": "small",
       "intent": "comms",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 20.64,
+      "seconds": 10.36,
       "components": [
         "comms_health(PLC1)",
         "comms_health(VFD1)"
@@ -90,17 +103,21 @@
       "panel_class": "medium",
       "intent": "vague",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 23.11,
+      "seconds": 26.09,
       "components": [
         "alarm_banner(ALM_HT01,ALM_LP01,ALM_MT01)",
         "status_indicator(Motor_1_RunStatus)",
         "gauge(Conveyor_Speed_SP)",
-        "trend(Temperature_PV)"
+        "trend(Temperature_PV)",
+        "comms_health(PLC1)",
+        "comms_health(VFD1)"
       ]
     },
     {
@@ -110,6 +127,8 @@
       "panel_class": "small",
       "intent": "vague",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
@@ -117,7 +136,9 @@
       "rate_limit_waits": 0,
       "seconds": 19.95,
       "components": [
-        "alarm_banner(ALM_HT01)"
+        "alarm_banner(ALM_HT01)",
+        "status_indicator(PLC1_Health)",
+        "status_indicator(VFD1_Health)"
       ]
     },
     {
@@ -127,12 +148,14 @@
       "panel_class": "large",
       "intent": "status",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 20.14,
+      "seconds": 10.34,
       "components": [
         "gauge(Conveyor_Speed_SP)",
         "gauge(Pressure_Sensor)"
@@ -144,20 +167,16 @@
       "asset_id": "line1.conveyorA",
       "panel_class": "small",
       "intent": "stress: implies control",
-      "success": true,
-      "stage": null,
-      "error_message": null,
-      "llm_calls": 1,
-      "retry_needed_to_succeed": false,
-      "rate_limit_waits": 1,
-      "seconds": 25.86,
-      "components": [
-        "alarm_banner(ALM_MT01,ALM_HT01)",
-        "status_indicator(Motor_1_RunStatus)",
-        "gauge(Conveyor_Speed_SP)",
-        "trend(Temperature_PV)",
-        "comms_health(PLC1)"
-      ]
+      "success": false,
+      "expected": "read_only",
+      "correct": true,
+      "stage": "read_only",
+      "error_message": "\"I want to start the motor from here\" asks to change the machine, and ScreenForge builds monitoring screens only. Every generated screen is read-only by design: it can display line1.conveyorA, but it cannot start, stop, or change anything on it. It can show you live values such as Motor_1_RunStatus, Conveyor_Speed_SP, Temperature_PV.",
+      "llm_calls": 0,
+      "retry_needed_to_succeed": null,
+      "rate_limit_waits": 0,
+      "seconds": 0.0,
+      "components": null
     },
     {
       "n": 9,
@@ -166,18 +185,19 @@
       "panel_class": "large",
       "intent": "stress: history/root cause",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 26.93,
+      "seconds": 8.36,
       "components": [
         "alarm_banner(ALM_HT01,ALM_LP01,ALM_MT01)",
         "status_indicator(Motor_1_RunStatus)",
         "gauge(Conveyor_Speed_SP)",
         "trend(Temperature_PV)",
-        "trend(Pressure_Sensor)",
         "comms_health(PLC1)",
         "comms_health(VFD1)"
       ]
@@ -189,17 +209,17 @@
       "panel_class": "medium",
       "intent": "stress: signals not in tags",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 24.65,
+      "seconds": 23.07,
       "components": [
         "alarm_banner(ALM_MT01)",
-        "status_indicator(Motor_1_RunStatus)",
-        "comms_health(PLC1)",
-        "comms_health(VFD1)"
+        "status_indicator(Motor_1_RunStatus)"
       ]
     },
     {
@@ -209,15 +229,16 @@
       "panel_class": "small",
       "intent": "status",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 27.55,
+      "seconds": 22.23,
       "components": [
-        "status_indicator(Compressor_RunStatus)",
-        "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)"
+        "status_indicator(Compressor_RunStatus)"
       ]
     },
     {
@@ -227,12 +248,14 @@
       "panel_class": "medium",
       "intent": "alarms",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 21.88,
+      "seconds": 18.33,
       "components": [
         "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)"
       ]
@@ -244,17 +267,20 @@
       "panel_class": "large",
       "intent": "status+alarms",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 16.83,
+      "seconds": 1.95,
       "components": [
         "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)",
         "status_indicator(Compressor_RunStatus)",
         "gauge(Condenser_Pressure)",
-        "gauge(Evaporator_Pressure)"
+        "gauge(Evaporator_Pressure)",
+        "gauge(Refrigerant_Level_PV)"
       ]
     },
     {
@@ -264,12 +290,14 @@
       "panel_class": "medium",
       "intent": "trend",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 21.89,
+      "seconds": 22.43,
       "components": [
         "trend(Chilled_Water_Supply_Temp)",
         "trend(Chilled_Water_Return_Temp)"
@@ -282,12 +310,14 @@
       "panel_class": "large",
       "intent": "comms",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 22.32,
+      "seconds": 19.11,
       "components": [
         "comms_health(BMS_Gateway)",
         "comms_health(Compressor_VFD)"
@@ -300,16 +330,19 @@
       "panel_class": "small",
       "intent": "vague",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 22.01,
+      "seconds": 19.38,
       "components": [
         "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)",
-        "comms_health(BMS_Gateway)",
-        "comms_health(Compressor_VFD)"
+        "status_indicator(Compressor_RunStatus)",
+        "gauge(Chilled_Water_Supply_Temp)",
+        "gauge(Chilled_Water_Return_Temp)"
       ]
     },
     {
@@ -319,17 +352,19 @@
       "panel_class": "medium",
       "intent": "stress: open-ended",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 23.92,
+      "seconds": 20.63,
       "components": [
         "alarm_banner(ALM_LR01)",
         "gauge(Refrigerant_Level_PV)",
-        "status_indicator(Compressor_RunStatus)",
-        "trend(Condenser_Pressure)"
+        "trend(Condenser_Pressure)",
+        "status_indicator(Compressor_RunStatus)"
       ]
     },
     {
@@ -339,19 +374,19 @@
       "panel_class": "large",
       "intent": "stress: open-ended",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
-      "rate_limit_waits": 0,
-      "seconds": 11.17,
+      "rate_limit_waits": 1,
+      "seconds": 26.21,
       "components": [
         "alarm_banner(ALM_HP01)",
-        "trend(Condenser_Pressure)",
         "gauge(Condenser_Pressure)",
-        "status_indicator(Compressor_RunStatus)",
-        "comms_health(BMS_Gateway)",
-        "comms_health(Compressor_VFD)"
+        "trend(Condenser_Pressure)",
+        "comms_health(BMS_Gateway)"
       ]
     },
     {
@@ -361,13 +396,16 @@
       "panel_class": "small",
       "intent": "stress: derived value",
       "success": true,
+      "expected": "spec",
+      "correct": true,
       "stage": null,
       "error_message": null,
       "llm_calls": 1,
       "retry_needed_to_succeed": false,
       "rate_limit_waits": 0,
-      "seconds": 24.84,
+      "seconds": 18.28,
       "components": [
+        "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)",
         "gauge(Chilled_Water_Supply_Temp)",
         "gauge(Chilled_Water_Return_Temp)"
       ]
@@ -378,20 +416,16 @@
       "asset_id": "plant.utilities.chiller1",
       "panel_class": "medium",
       "intent": "stress: implies control",
-      "success": true,
-      "stage": null,
-      "error_message": null,
-      "llm_calls": 1,
-      "retry_needed_to_succeed": false,
+      "success": false,
+      "expected": "read_only",
+      "correct": true,
+      "stage": "read_only",
+      "error_message": "\"drop the compressor speed a bit\" asks to change the machine, and ScreenForge builds monitoring screens only. Every generated screen is read-only by design: it can display plant.utilities.chiller1, but it cannot start, stop, or change anything on it. It can show you live values such as Compressor_RunStatus, Chilled_Water_Supply_Temp, Chilled_Water_Return_Temp.",
+      "llm_calls": 0,
+      "retry_needed_to_succeed": null,
       "rate_limit_waits": 0,
-      "seconds": 22.18,
-      "components": [
-        "alarm_banner(ALM_HP01,ALM_LR01,ALM_CT01)",
-        "status_indicator(Compressor_RunStatus)",
-        "comms_health(BMS_Gateway)",
-        "comms_health(Compressor_VFD)",
-        "trend(Condenser_Pressure)"
-      ]
+      "seconds": 0.0,
+      "components": null
     }
   ]
 }

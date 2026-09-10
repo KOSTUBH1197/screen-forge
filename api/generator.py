@@ -40,10 +40,36 @@ import validator
 
 MODEL_NAME = "gpt-4o-mini"
 
-# Groq serves an OpenAI-compatible API, so the same client and the same strict
-# json_schema request work. gpt-oss-120b accepts GENERATION_SCHEMA in strict mode.
+# Groq and xAI both serve an OpenAI-compatible API, so the same client and the
+# same strict json_schema request work against all three -- only the base_url,
+# the key and the model name change. gpt-oss-120b accepts GENERATION_SCHEMA in
+# strict mode.
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_MODEL_NAME = "openai/gpt-oss-120b"
+XAI_BASE_URL = "https://api.x.ai/v1"
+XAI_MODEL_NAME = "grok-4.1-fast-non-reasoning"
+
+# provider -> (env var holding the key, base_url or None for OpenAI's own,
+# default model, default reasoning_effort). Order matters: the first provider
+# with a key set wins.
+#
+# reasoning_effort is per-provider because it is not universally supported:
+# the gpt-oss models on Groq are reasoning models and accept it, gpt-4o-mini
+# does not. "low" is the measured default for Groq -- it cuts reasoning from
+# ~426 tokens to ~34 per call with no loss of reliability (still 20/20), and
+# fewer tokens is what buys headroom against the tokens-per-minute limit.
+PROVIDERS: dict[str, tuple[str, str | None, str, str | None]] = {
+    "openai": ("OPENAI_API_KEY", None, MODEL_NAME, None),
+    "groq": ("GROQ_API_KEY", GROQ_BASE_URL, GROQ_MODEL_NAME, "low"),
+    "xai": ("XAI_API_KEY", XAI_BASE_URL, XAI_MODEL_NAME, None),
+}
+
+# Both knobs are overridable from api/.env, so a timing experiment is a
+# one-line change rather than an edit to this file:
+#   SCREENFORGE_MODEL=openai/gpt-oss-20b   -- swap the model
+#   SCREENFORGE_REASONING_EFFORT=medium    -- override the provider default
+MODEL_ENV_VAR = "SCREENFORGE_MODEL"
+REASONING_EFFORT_ENV_VAR = "SCREENFORGE_REASONING_EFFORT"
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "contracts" / "fixtures"
 SCREEN_SPEC_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "contracts" / "screen-spec.schema.json"
@@ -168,28 +194,55 @@ def _strip_nulls(spec: dict) -> dict:
     return cleaned
 
 
+def _active_provider() -> str:
+    """The first provider in PROVIDERS whose key is set."""
+    for provider, (env_var, _base_url, _model, _effort) in PROVIDERS.items():
+        if os.environ.get(env_var):
+            return provider
+
+    keys = ", ".join(env_var for env_var, _b, _m, _e in PROVIDERS.values())
+    raise RuntimeError(f"No LLM key set: put one of {keys} in api/.env")
+
+
+def reasoning_effort() -> str | None:
+    """
+    The reasoning_effort for the next call: SCREENFORGE_REASONING_EFFORT if
+    set, else the active provider's default, else None (knob not sent at all).
+    """
+    override = os.environ.get(REASONING_EFFORT_ENV_VAR)
+    if override:
+        return override
+    try:
+        return PROVIDERS[_active_provider()][3]
+    except RuntimeError:
+        return None
+
+
 def llm_provider() -> tuple[str, str]:
     """
-    Which (provider, model) the next LLM call will use, read at call time:
-    OpenAI when OPENAI_API_KEY is set, otherwise Groq when GROQ_API_KEY is set.
+    Which (provider, model) the next LLM call will use, read at call time.
+    SCREENFORGE_MODEL overrides that provider's default model.
     """
-    if os.environ.get("OPENAI_API_KEY"):
-        return "openai", MODEL_NAME
-    if os.environ.get("GROQ_API_KEY"):
-        return "groq", GROQ_MODEL_NAME
-    raise RuntimeError("No LLM key set: put OPENAI_API_KEY or GROQ_API_KEY in api/.env")
+    provider = _active_provider()
+    _env_var, _base_url, default_model, _effort = PROVIDERS[provider]
+    return provider, os.environ.get(MODEL_ENV_VAR) or default_model
 
 
 def _call_llm(system_prompt: str, user_prompt: str) -> dict:
     """
-    Real LLM call using Structured Outputs, against OpenAI or Groq depending
-    on which key is set (see llm_provider()).
+    Real LLM call using Structured Outputs, against whichever provider has a
+    key set (see llm_provider()).
     """
     provider, model = llm_provider()
-    if provider == "openai":
-        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    else:
-        client = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url=GROQ_BASE_URL)
+    env_var, base_url, _default_model, _default_effort = PROVIDERS[provider]
+
+    client = OpenAI(api_key=os.environ[env_var], base_url=base_url)
+
+    extra = {}
+    effort = reasoning_effort()
+    if effort:
+        extra["reasoning_effort"] = effort
+
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -204,6 +257,7 @@ def _call_llm(system_prompt: str, user_prompt: str) -> dict:
                 "strict": True,
             },
         },
+        **extra,
     )
     return json.loads(response.choices[0].message.content)
 

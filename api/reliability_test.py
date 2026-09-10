@@ -164,9 +164,11 @@ def main() -> int:
         print("This test deliberately makes real LLM calls; it cannot run without a key.")
         return 2
 
+    effort = generator.reasoning_effort()
     total = len(PROMPTS)
     required = math.ceil(PASS_RATE_REQUIRED * total)
-    print(f"ScreenForge reliability test: {total} prompts, provider {provider}, model {model}, real LLM calls\n", flush=True)
+    effort_note = f", reasoning_effort {effort}" if effort else ""
+    print(f"ScreenForge reliability test: {total} prompts, provider {provider}, model {model}{effort_note}, real LLM calls\n", flush=True)
 
     results = []
     for i, (prompt, asset_id, panel_class, intent, expect) in enumerate(PROMPTS, start=1):
@@ -219,6 +221,7 @@ def main() -> int:
         "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "provider": provider,
         "model": model,
+        "reasoning_effort": effort,
         "summary": {
             "total": total,
             "passed": len(passed),
