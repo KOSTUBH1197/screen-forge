@@ -13,7 +13,9 @@ Two ways to run this:
 
 What it checks:
   * The 3 frozen golden specs in contracts/fixtures/ all validate=True.
-  * The 4 deliberately-broken specs in api/tests/fixtures/ all validate=False,
+  * valid_nav_tile.json (api/tests/fixtures/) also validates=True -- a
+    nav_tile binding a known asset_id via bind_asset.
+  * The 5 deliberately-broken specs in api/tests/fixtures/ all validate=False,
     each failing the exact layer it was built to break.
 
 Note on broken_readonly.json: it sets permissions.mode = "read_write". The
@@ -46,6 +48,12 @@ GOLDEN_FILES = [
     "spec.golden.status-alarms.json",
     "spec.golden.trend.json",
     "spec.golden.comms.json",
+]
+
+# Non-golden specs (in api/tests/fixtures/, not the frozen contracts/) that
+# must still pass all three layers.
+EXTRA_PASSING_FILES = [
+    "valid_nav_tile.json",
 ]
 
 # Broken specs: (filename, expected failed_layer, why it's broken).
@@ -81,6 +89,11 @@ BROKEN_CASES = [
         "whitelist",
         "gauge binds 'Motor_Start', which is an access: write command tag",
     ),
+    (
+        "broken_nav_tile_unknown_asset.json",
+        "whitelist",
+        "nav_tile bind_asset 'plant.utilities.boilerZZ' is not a known asset_id",
+    ),
 ]
 
 
@@ -95,6 +108,17 @@ def _load(path: Path) -> dict:
 @pytest.mark.parametrize("filename", GOLDEN_FILES)
 def test_golden_specs_pass_all_layers(filename):
     result = validate_spec(_load(CONTRACT_FIXTURES / filename))
+    assert result.valid is True, (
+        f"{filename}: expected valid, got failed_layer={result.failed_layer!r} "
+        f"errors={result.errors}"
+    )
+    assert result.failed_layer is None
+    assert result.errors == []
+
+
+@pytest.mark.parametrize("filename", EXTRA_PASSING_FILES)
+def test_extra_passing_specs_pass_all_layers(filename):
+    result = validate_spec(_load(BROKEN_FIXTURES / filename))
     assert result.valid is True, (
         f"{filename}: expected valid, got failed_layer={result.failed_layer!r} "
         f"errors={result.errors}"
@@ -127,6 +151,17 @@ def run_summary() -> bool:
 
     for filename in GOLDEN_FILES:
         result = validate_spec(_load(CONTRACT_FIXTURES / filename))
+        if result.valid:
+            lines.append(f"{filename}: PASS (valid)")
+        else:
+            ok = False
+            lines.append(
+                f"{filename}: FAIL (expected valid, rejected at layer "
+                f"'{result.failed_layer}': {result.errors})"
+            )
+
+    for filename in EXTRA_PASSING_FILES:
+        result = validate_spec(_load(BROKEN_FIXTURES / filename))
         if result.valid:
             lines.append(f"{filename}: PASS (valid)")
         else:

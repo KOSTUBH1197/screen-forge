@@ -65,8 +65,8 @@ ALLOWED_COMPONENT_TYPES = {
 # day someone adds a write-capable component type.
 WRITE_CAPABLE_TYPES: set[str] = set()
 
-# The three binding fields; a component must carry exactly one of them.
-_BIND_FIELDS = ("bind_tag", "bind_alarms", "bind_device")
+# The four binding fields; a component must carry exactly one of them.
+_BIND_FIELDS = ("bind_tag", "bind_alarms", "bind_device", "bind_asset")
 
 
 @dataclass
@@ -175,6 +175,17 @@ def _layer2_whitelist(spec: dict) -> list[str]:
                 errors.append(
                     f"component {cid}: bind_device {device!r} not found in context "
                     f"comms devices for asset {asset_id}"
+                )
+
+        if "bind_asset" in component:
+            # nav_tile jumps to a *different* machine, so its target is
+            # checked against every known asset_id (across all contexts),
+            # not against this asset's own context.
+            target_asset = component["bind_asset"]
+            if target_asset not in context_store.list_asset_ids():
+                errors.append(
+                    f"component {cid}: bind_asset {target_asset!r} is not a known "
+                    f"asset_id (known asset_ids: {context_store.list_asset_ids()})"
                 )
 
     return errors
