@@ -20,6 +20,7 @@ import {
 } from "./ProgressStages";
 import { ScaleToFit } from "./ScaleToFit";
 import { ScreenRenderer } from "./ScreenRenderer";
+import { SpecValidator } from "./SpecValidator";
 import { VoiceButton } from "./VoiceButton";
 
 const EXAMPLE_PROMPTS = [
@@ -456,6 +457,8 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
           {JSON.stringify(spec, null, 2)}
         </pre>
       </details>
+
+      <SpecValidator currentSpec={spec} />
     </main>
   );
 }

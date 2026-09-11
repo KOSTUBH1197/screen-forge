@@ -11,8 +11,9 @@ npm install
 npm run dev          # http://localhost:3000
 ```
 
-The API base URL defaults to `http://localhost:8000`. Override it with
-`NEXT_PUBLIC_API_BASE`. With no API running, /web still works: tag values come
+The API base URL defaults to `http://127.0.0.1:8000` (not `localhost`: uvicorn
+listens on IPv4 only, and on Windows `localhost` tries IPv6 first, costing ~2 s per
+request). Override it with `NEXT_PUBLIC_API_BASE`. With no API running, /web still works: tag values come
 from a local mock simulator and golden screens load from `contracts/fixtures`.
 
 Open a golden screen directly by URL:
@@ -46,6 +47,10 @@ banner and severity colours depend on it. Comms health tags are booleans.
 When /web regenerates a screen because its machine context changed, it adds
 `"since_context_version": "<version the old screen was built for>"` and sends the
 operator's request unchanged; /api then tells the model which signals are new.
+
+**`POST /reconcile`** with `{ "spec": <any JSON> }` backs two things: the "context
+updated" banner (`changes`, `broken_bindings`) and the "Validate a screen spec"
+panel, which shows `still_valid` and lists `errors` verbatim.
 
 - Success: `{ "spec": <screen spec> }`, optionally with `"meta": {}`.
 - Failure, any HTTP status: `{ "error": "message" }` or, better,

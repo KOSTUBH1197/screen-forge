@@ -40,7 +40,8 @@ export function ErrorCard({ error, apiBase, hasScreen }: { error: ConsoleError; 
     stage = error.error.stage;
     title = (stage && STAGE_TITLE[stage]) || "Screen generation failed";
     message = error.error.message;
-    hint = (stage && STAGE_HINT[stage]) || null;
+    // /api's read-only refusal already explains itself; the generic hint would only repeat it.
+    hint = stage === "read_only" ? null : (stage && STAGE_HINT[stage]) || null;
     field = error.error.field ?? null;
     details = error.error.details;
   } else if (error.kind === "unreachable") {
