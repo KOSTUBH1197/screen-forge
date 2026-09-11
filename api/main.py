@@ -33,7 +33,11 @@ app = FastAPI(title="ScreenForge API")
 # browser, not your code -- a classic "why is nothing happening" bug.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    # Both spellings of the dev origin. The page's Origin header is whatever
+    # the operator typed in the address bar, and typing 127.0.0.1:3000 (which
+    # is what /web itself uses to reach this API) otherwise fails CORS
+    # silently -- the UI just sits on "connecting" with nothing in the API log.
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
