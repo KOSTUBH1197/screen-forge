@@ -45,6 +45,8 @@ interface GenerateOptions {
   contextUpdate?: ReconcileReport | null;
   /** The context_version the replaced screen was built for; /api then tells the model what's new. */
   sinceContextVersion?: string;
+  /** The screen being replaced; /api keeps its components and adds the new signal alongside. */
+  previousSpec?: ScreenSpec;
 }
 
 function Segmented<T extends string>({
@@ -152,6 +154,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
           asset_id: options.assetId !== undefined ? options.assetId : target === "auto" ? null : target,
           panel_class: panel,
           since_context_version: options.sinceContextVersion ?? null,
+          previous_spec: options.previousSpec ?? null,
         });
         if (id !== runId.current) return;
 
@@ -219,8 +222,9 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
       assetId: spec.asset_id,
       contextUpdate: reconcile.report,
       sinceContextVersion: spec.context_version,
+      previousSpec: spec,
     });
-  }, [staleKey, reconcile, origin, running, generate, spec.asset_id, spec.context_version]);
+  }, [staleKey, reconcile, origin, running, generate, spec]);
 
   const regenerateForContext = () => {
     const text = origin.kind === "generated" ? origin.prompt : spec.title;
@@ -230,6 +234,7 @@ export function OperatorConsole({ initialGolden, initialPanel, initialView }: Op
       assetId: spec.asset_id,
       contextUpdate: reconcile?.report ?? null,
       sinceContextVersion: spec.context_version,
+      previousSpec: spec,
     });
   };
 

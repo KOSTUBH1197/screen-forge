@@ -45,8 +45,9 @@ banner and severity colours depend on it. Comms health tags are booleans.
 **`POST /generate`** with `{ "prompt": string, "asset_id": string | null, "panel_class": "small" | "medium" | "large" }`.
 `asset_id` is `null` when the operator leaves the machine on "detect from request".
 When /web regenerates a screen because its machine context changed, it adds
-`"since_context_version": "<version the old screen was built for>"` and sends the
-operator's request unchanged; /api then tells the model which signals are new.
+`"since_context_version": "<version the old screen was built for>"` and
+`"previous_spec": <the old screen's spec>`, and sends the operator's request
+unchanged; /api then keeps what is already on screen and adds the new signals.
 
 **`POST /reconcile`** with `{ "spec": <any JSON> }` backs two things: the "context
 updated" banner (`changes`, `broken_bindings`) and the "Validate a screen spec"

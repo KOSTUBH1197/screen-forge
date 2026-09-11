@@ -102,6 +102,8 @@ export interface GenerateRequest {
   panel_class: PanelClass;
   /** When regenerating a stale screen: the version it was built for, so /api tells the model what's new. */
   since_context_version?: string | null;
+  /** When regenerating a stale screen: that screen's spec, so /api keeps what the operator can already see. */
+  previous_spec?: ScreenSpec | null;
 }
 
 /**
